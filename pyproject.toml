@@ -1,0 +1,16 @@
+[project]
+name = "build123-mcp"
+version = "0.1.0"
+description = "MCP server wrapping build123d for interactive 3D CAD"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp",
+    "build123d",
+    "pyvista",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[project.scripts]
+build123-mcp = "server:main"
