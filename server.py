@@ -31,7 +31,7 @@ def measure(query: str = "bounding_box", object_name: str = "", object_name2: st
 
 @mcp.tool()
 def export(filename: str, format: str = "step", object_name: str = "") -> str:
-    """Export model. format: step, stl. object_name: named object from show() (default: current shape)."""
+    """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show() (default: current shape)."""
     return export_file(_session, filename, format, object_name)
 
 

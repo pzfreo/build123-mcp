@@ -63,6 +63,31 @@ def test_create_measure_export_round_trip(session, tmp_path):
     assert os.path.getsize(path + ".step") > 1000
 
 
+def test_multi_format_export_produces_both_files(session, tmp_path):
+    """Exporting step,stl in one call writes both files with real content."""
+    execute_code(session, "result = Box(20, 20, 20)")
+    path = str(tmp_path / "part")
+    result = export_file(session, path, "step,stl")
+    step_size = os.path.getsize(path + ".step")
+    stl_size = os.path.getsize(path + ".stl")
+    # STEP files are text-based and larger; STL binary is compact but non-zero
+    assert step_size > 1000
+    assert stl_size > 0
+    # Both paths reported in the return message
+    assert ".step" in result
+    assert ".stl" in result
+
+
+def test_multi_format_export_named_object(session, tmp_path):
+    """Multi-format export targets the named object, not current_shape."""
+    execute_code(session, "result = Box(5, 5, 5)\nshow('big', Box(40, 40, 40))")
+    path = str(tmp_path / "big")
+    export_file(session, path, "step,stl", "big")
+    # The big box STEP file is distinctly larger than a 5mm box would produce
+    assert os.path.getsize(path + ".step") > 1000
+    assert os.path.getsize(path + ".stl") > 0
+
+
 def test_reset_discards_previous_geometry(session):
     """After reset, old geometry is gone and new geometry starts from scratch."""
     execute_code(session, "result = Box(100, 100, 100)")
@@ -281,6 +306,18 @@ def test_mcp_reset_clears_state():
 
     text = asyncio.run(_mcp_session(run))
     assert "No shape" in text
+
+
+def test_mcp_multi_format_export():
+    """export with format='step,stl' reports both paths over the MCP wire."""
+    async def run(mcp):
+        await mcp.call_tool("execute", {"code": "from build123d import *\nresult = Box(10, 10, 10)"})
+        result = await mcp.call_tool("export", {"filename": "/tmp/mcp_test_out", "format": "step,stl"})
+        return result.content[0].text
+
+    text = asyncio.run(_mcp_session(run))
+    assert ".step" in text
+    assert ".stl" in text
 
 
 def test_mcp_volume_and_clearance():

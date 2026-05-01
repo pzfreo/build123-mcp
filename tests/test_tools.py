@@ -183,6 +183,18 @@ def test_export_stl(session, tmp_path):
     assert os.path.getsize(path + ".stl") > 0
 
 
+def test_export_multi_format(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    path = str(tmp_path / "out")
+    result = export_file(session, path, "step,stl")
+    assert os.path.exists(path + ".step")
+    assert os.path.exists(path + ".stl")
+    assert os.path.getsize(path + ".step") > 0
+    assert os.path.getsize(path + ".stl") > 0
+    assert path + ".step" in result
+    assert path + ".stl" in result
+
+
 def test_export_invalid_format(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Unknown format"):
