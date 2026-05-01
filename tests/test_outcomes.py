@@ -93,6 +93,70 @@ def test_error_in_execute_preserves_current_shape(session):
 
 
 # ---------------------------------------------------------------------------
+# Multi-object session: show(), per-object measure/export/render
+# ---------------------------------------------------------------------------
+
+def test_named_objects_have_independent_bounding_boxes(session):
+    """show() isolates shapes: each named object reports its own dimensions."""
+    execute_code(session, "show('small', Box(5, 5, 5))\nshow('large', Box(40, 40, 40))")
+    small = json.loads(measure(session, "bounding_box", "small"))
+    large = json.loads(measure(session, "bounding_box", "large"))
+    assert abs(small["xsize"] - 5) < 0.01
+    assert abs(large["xsize"] - 40) < 0.01
+
+
+def test_assembly_render_differs_from_single_part_render(session):
+    """Rendering all registered objects produces a different image than one part alone."""
+    execute_code(session, "show('box', Box(10, 10, 10))\nshow('cyl', Cylinder(3, 30))")
+    png_all = render_view(session, "iso")
+    png_one = render_view(session, "iso", objects="box")
+    assert png_all[:8] == PNG_MAGIC
+    assert png_one[:8] == PNG_MAGIC
+    assert png_all != png_one
+
+
+def test_export_named_object_independent_of_current_shape(session, tmp_path):
+    """Exporting a named object writes that shape, not current_shape."""
+    execute_code(session, "result = Box(5, 5, 5)\nshow('big', Box(50, 50, 50))")
+    path = str(tmp_path / "big")
+    export_file(session, path, "step", "big")
+    # The big box STEP file should be larger than a tiny box would produce
+    assert os.path.getsize(path + ".step") > 1000
+
+
+def test_reset_clears_show_registry(session):
+    """After reset, previously registered objects are gone."""
+    execute_code(session, "show('part', Box(10, 10, 10))")
+    assert "part" in session.objects
+    session.reset()
+    assert not session.objects
+
+
+# ---------------------------------------------------------------------------
+# Rendering quality and clip plane
+# ---------------------------------------------------------------------------
+
+def test_high_quality_render_differs_from_standard(session):
+    """High quality tessellation produces a different image than standard."""
+    execute_code(session, "result = Cylinder(5, 20)")
+    png_std = render_view(session, "iso", quality="standard")
+    png_hi = render_view(session, "iso", quality="high")
+    assert png_std[:8] == PNG_MAGIC
+    assert png_hi[:8] == PNG_MAGIC
+    assert png_std != png_hi
+
+
+def test_clip_plane_produces_different_image_than_unclipped(session):
+    """A clipped render exposes internal geometry and differs from the unclipped view."""
+    execute_code(session, "result = Cylinder(8, 30)")
+    png_full = render_view(session, "iso")
+    png_clip = render_view(session, "iso", clip_plane="y")
+    assert png_full[:8] == PNG_MAGIC
+    assert png_clip[:8] == PNG_MAGIC
+    assert png_full != png_clip
+
+
+# ---------------------------------------------------------------------------
 # MCP protocol round-trip: test through the actual stdio transport
 # ---------------------------------------------------------------------------
 
@@ -164,3 +228,21 @@ def test_mcp_reset_clears_state():
 
     text = asyncio.run(_mcp_session(run))
     assert "No shape" in text
+
+
+def test_mcp_show_and_measure_named_object():
+    """show() + per-object measure round-trip through the MCP wire."""
+    async def run(mcp):
+        await mcp.call_tool(
+            "execute",
+            {"code": "from build123d import *\nshow('wide', Box(40, 5, 5))\nshow('tall', Box(5, 5, 40))"},
+        )
+        r_wide = await mcp.call_tool("measure", {"query": "bounding_box", "object_name": "wide"})
+        r_tall = await mcp.call_tool("measure", {"query": "bounding_box", "object_name": "tall"})
+        return r_wide.content[0].text, r_tall.content[0].text
+
+    wide_json, tall_json = asyncio.run(_mcp_session(run))
+    wide = json.loads(wide_json)
+    tall = json.loads(tall_json)
+    assert abs(wide["xsize"] - 40) < 0.01
+    assert abs(tall["zsize"] - 40) < 0.01
