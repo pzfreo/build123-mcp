@@ -1,17 +1,14 @@
 import json
 import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from session import Session
-from tools.execute import execute_code
-from tools.export import export_file
-from tools.interference import interference
-from tools.measure import measure
-from tools.render import render_view
+from build123d_mcp.session import Session
+from build123d_mcp.tools.execute import execute_code
+from build123d_mcp.tools.export import export_file
+from build123d_mcp.tools.interference import interference
+from build123d_mcp.tools.measure import measure
+from build123d_mcp.tools.render import render_view
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 import io
 from contextlib import redirect_stdout, redirect_stderr
 
-from security import (
+from build123d_mcp.security import (
     EXEC_TIMEOUT_SECONDS,
     ExecutionTimeout,
     check_ast,

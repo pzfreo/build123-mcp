@@ -6,17 +6,14 @@ import asyncio
 import base64
 import json
 import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from session import Session
-from tools.execute import execute_code
-from tools.export import export_file
-from tools.measure import measure
-from tools.render import render_view
+from build123d_mcp.session import Session
+from build123d_mcp.tools.execute import execute_code
+from build123d_mcp.tools.export import export_file
+from build123d_mcp.tools.measure import measure
+from build123d_mcp.tools.render import render_view
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 SERVER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -332,7 +329,7 @@ async def _mcp_session(coro):
 
     params = StdioServerParameters(
         command="uv",
-        args=["run", "python", "server.py"],
+        args=["run", "build123d-mcp"],
         cwd=SERVER_DIR,
     )
     async with stdio_client(params) as (read, write):
