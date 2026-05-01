@@ -43,18 +43,19 @@ result = bp.part
 
 ## Multi-object assemblies
 
-Use `show(name, shape)` inside `execute` to register named parts. This lets you render, measure, and export individual parts independently:
+Use `show(shape, name)` inside `execute` to register named parts. This lets you render, measure, and export individual parts independently:
 
 ```python
 frame = Box(60, 40, 8)
-show("frame", frame)
+show(frame, "frame")
 
 axle = Cylinder(5, 50)
-show("axle", axle)
+show(axle, "axle")
 ```
 
 - `render_view()` — shows all registered objects together, each in a distinct colour
 - `render_view(objects="frame")` — shows only the named part
+- `render_view(objects="frame:blue,axle:red")` — override colours explicitly
 - `measure(query="bounding_box", object_name="frame")` — measures a specific part
 - `measure(query="clearance", object_name="axle", object_name2="frame")` — checks fit
 - `export(filename="frame", format="step", object_name="frame")` — exports a specific part

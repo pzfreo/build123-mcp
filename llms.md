@@ -8,14 +8,14 @@ All tool calls share a single Python namespace. Variables and shapes you create 
 
 ### Multi-object sessions
 
-Use `show(name, shape)` inside `execute` to register named objects. All tools that accept `object_name` operate on a named object instead of the implicit `current_shape`. This is essential for assemblies where you need to inspect, measure, or export individual parts.
+Use `show(shape, name)` inside `execute` to register named objects. All tools that accept `object_name` operate on a named object instead of the implicit `current_shape`. This is essential for assemblies where you need to inspect, measure, or export individual parts.
 
 ```python
 frame = Box(60, 40, 8)
-show("frame", frame)
+show(frame, "frame")
 
 axle = Cylinder(5, 50)
-show("axle", axle)
+show(axle, "axle")
 ```
 
 ---
@@ -29,7 +29,7 @@ Run build123d Python code in the persistent session.
 
 **Returns:** captured stdout/stderr, or `"OK"` if silent, or an error message on exception.
 
-The server auto-detects the current shape. Prefer assigning your final shape to `result`, or use `show(name, shape)` for named objects:
+The server auto-detects the current shape. Prefer assigning your final shape to `result`, or use `show(shape, name)` for named objects:
 ```python
 result = Box(10, 20, 30)
 ```
@@ -49,7 +49,7 @@ Render one or more shapes and return a PNG image.
 
 **Inputs:**
 - `direction` (string, default `"iso"`) — `top`, `front`, `side`, `iso`
-- `objects` (string, default `""`) — comma-separated names from `show()` to render; empty = all registered objects, or `current_shape` if none registered
+- `objects` (string, default `""`) — comma-separated names from `show()` to render; empty = all registered objects, or `current_shape` if none registered. Optionally suffix a name with `:color` to override the auto-assigned colour, e.g. `"frame:blue,axle:red"`
 - `quality` (string, default `"standard"`) — `standard` or `high`; high uses finer tessellation to eliminate artefacts on curved surfaces
 - `clip_plane` (string, default `""`) — `x`, `y`, or `z`; clips each mesh at its bounding-box midpoint to expose internal geometry (bores, wall thickness)
 
