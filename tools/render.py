@@ -29,12 +29,10 @@ def render_view(session, direction: str = "iso") -> bytes:
     import pyvista as pv
     from build123d import Mesher
 
-    stl_fd, stl_path = tempfile.mkstemp(suffix=".stl")
-    png_fd, png_path = tempfile.mkstemp(suffix=".png")
-    os.close(stl_fd)
-    os.close(png_fd)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        stl_path = os.path.join(tmpdir, "shape.stl")
+        png_path = os.path.join(tmpdir, "render.png")
 
-    try:
         mesher = Mesher()
         mesher.add_shape(shape)
         mesher.write(stl_path)
@@ -65,9 +63,3 @@ def render_view(session, direction: str = "iso") -> bytes:
 
         with open(png_path, "rb") as f:
             return f.read()
-    finally:
-        for path in (stl_path, png_path):
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
