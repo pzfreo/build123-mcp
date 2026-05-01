@@ -8,10 +8,11 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 
 ## Tools
 
-- `execute` — run build123d Python code in a persistent session
-- `render_view` — render the current model from a given direction, returns a PNG image
-- `measure` — query bounding box dimensions on the current model
-- `export` — export the current model as STEP or STL
+- `execute` — run build123d Python code in a persistent session; use `show(name, shape)` to register named parts
+- `render_view` — render one or more shapes as PNG; supports assembly compositing, high-quality tessellation, and cross-section clip planes
+- `measure` — query bounding box, volume, surface area, minimum wall thickness, or clearance between two named bodies
+- `export` — export as STEP, STL, or both in one call; targets a named object or the current shape
+- `save_snapshot` / `restore_snapshot` — checkpoint and recover geometric state without re-running prior code
 - `reset` — clear the session back to empty state
 
 See [llms.md](llms.md) for full tool reference and usage patterns.
@@ -150,4 +151,4 @@ For best results, paste the contents of [default_prompt.md](default_prompt.md) a
 
 ## Status
 
-Early development (v0.1.0).
+Active development (v0.2.0).

@@ -118,6 +118,50 @@ def test_error_in_execute_preserves_current_shape(session):
 
 
 # ---------------------------------------------------------------------------
+# Session snapshots
+# ---------------------------------------------------------------------------
+
+def test_snapshot_restores_geometry_after_bad_experiment(session):
+    """save_snapshot / restore_snapshot recovers known-good geometry."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("good")
+    good_vol = json.loads(measure(session, "volume"))["volume"]
+
+    # Simulate an experiment that produces wrong geometry
+    execute_code(session, "result = Box(1, 1, 1)")
+    assert json.loads(measure(session, "volume"))["volume"] < good_vol
+
+    session.restore_snapshot("good")
+    assert abs(json.loads(measure(session, "volume"))["volume"] - good_vol) < 0.1
+
+
+def test_snapshot_objects_registry_survives_round_trip(session):
+    """Named objects are captured in the snapshot and restored correctly."""
+    execute_code(session, "show('frame', Box(60, 40, 8))\nshow('axle', Cylinder(5, 50))")
+    session.save_snapshot("assembly_v1")
+
+    # Overwrite both objects
+    execute_code(session, "show('frame', Box(1, 1, 1))\nshow('axle', Box(1, 1, 1))")
+    session.restore_snapshot("assembly_v1")
+
+    frame_bb = json.loads(measure(session, "bounding_box", "frame"))
+    axle_bb = json.loads(measure(session, "bounding_box", "axle"))
+    assert abs(frame_bb["xsize"] - 60) < 0.1
+    assert abs(axle_bb["zsize"] - 50) < 0.1
+
+
+def test_namespace_not_restored_by_snapshot(session):
+    """Python variables set after a snapshot are still accessible after restore.
+    This confirms the documented behaviour: snapshot saves geometry only."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("s1")
+    execute_code(session, "extra_var = 123")
+    session.restore_snapshot("s1")
+    # extra_var is still in scope even though it was created after the snapshot
+    assert session.namespace.get("extra_var") == 123
+
+
+# ---------------------------------------------------------------------------
 # Multi-object session: show(), per-object measure/export/render
 # ---------------------------------------------------------------------------
 
@@ -253,13 +297,14 @@ async def _mcp_session(coro):
             return await coro(mcp)
 
 
-def test_mcp_lists_all_five_tools():
+def test_mcp_lists_all_tools():
     async def run(mcp):
         result = await mcp.list_tools()
         return {t.name for t in result.tools}
 
     names = asyncio.run(_mcp_session(run))
-    assert names == {"execute", "render_view", "measure", "export", "reset"}
+    assert names == {"execute", "render_view", "measure", "export", "reset",
+                     "save_snapshot", "restore_snapshot"}
 
 
 def test_mcp_execute_and_measure_round_trip():
@@ -306,6 +351,20 @@ def test_mcp_reset_clears_state():
 
     text = asyncio.run(_mcp_session(run))
     assert "No shape" in text
+
+
+def test_mcp_snapshot_save_and_restore():
+    """save_snapshot / restore_snapshot round-trip through the MCP wire restores geometry."""
+    async def run(mcp):
+        await mcp.call_tool("execute", {"code": "from build123d import *\nresult = Box(10, 10, 10)"})
+        await mcp.call_tool("save_snapshot", {"name": "v1"})
+        await mcp.call_tool("execute", {"code": "result = Box(99, 99, 99)"})
+        await mcp.call_tool("restore_snapshot", {"name": "v1"})
+        result = await mcp.call_tool("measure", {"query": "bounding_box"})
+        return result.content[0].text
+
+    data = json.loads(asyncio.run(_mcp_session(run)))
+    assert abs(data["xsize"] - 10) < 0.01
 
 
 def test_mcp_multi_format_export():
