@@ -128,6 +128,42 @@ def test_measure_invalid_query(session):
         measure(session, "surface_area")
 
 
+def test_measure_volume(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(measure(session, "volume"))
+    assert abs(data["volume"] - 1000) < 0.1
+
+
+def test_measure_area(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(measure(session, "area"))
+    assert abs(data["area"] - 600) < 0.1
+
+
+def test_measure_min_wall_thickness(session):
+    execute_code(session, "result = Box(20, 20, 4)")
+    data = json.loads(measure(session, "min_wall_thickness"))
+    assert abs(data["min_wall_thickness"] - 4) < 0.1
+
+
+def test_measure_clearance(session):
+    execute_code(session, "show('a', Box(10,10,10))\nshow('b', Box(10,10,10).move(Location((20,0,0))))")
+    data = json.loads(measure(session, "clearance", "a", "b"))
+    assert abs(data["clearance"] - 10) < 0.1
+
+
+def test_measure_clearance_missing_object2_raises(session):
+    execute_code(session, "show('a', Box(10,10,10))")
+    with pytest.raises(ValueError, match="object_name2"):
+        measure(session, "clearance", "a")
+
+
+def test_measure_clearance_unknown_object2_raises(session):
+    execute_code(session, "show('a', Box(10,10,10))")
+    with pytest.raises(ValueError, match="Unknown object"):
+        measure(session, "clearance", "a", "missing")
+
+
 # --- export ---
 
 def test_export_step(session, tmp_path):

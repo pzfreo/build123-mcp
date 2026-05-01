@@ -24,9 +24,9 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
 
 
 @mcp.tool()
-def measure(query: str = "bounding_box", object_name: str = "") -> str:
-    """Query geometry. query: bounding_box. object_name: named object from show() (default: current shape)."""
-    return measure_fn(_session, query, object_name)
+def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
+    """Query geometry. query: bounding_box, volume, area, min_wall_thickness, clearance. object_name/object_name2: named objects from show() (clearance requires both)."""
+    return measure_fn(_session, query, object_name, object_name2)
 
 
 @mcp.tool()
