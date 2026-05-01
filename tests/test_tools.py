@@ -78,6 +78,31 @@ def test_render_view_no_shape_raises(session):
         render_view(session, "iso")
 
 
+def test_render_view_high_quality_returns_png(session):
+    execute_code(session, "result = Cylinder(5, 20)")
+    png = render_view(session, "iso", quality="high")
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_invalid_quality_raises(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Unknown quality"):
+        render_view(session, "iso", quality="ultra")
+
+
+def test_render_view_clip_plane_returns_png(session):
+    execute_code(session, "result = Cylinder(5, 20)")
+    for plane in ("x", "y", "z"):
+        png = render_view(session, "iso", clip_plane=plane)
+        assert png[:8] == PNG_MAGIC, f"clip_plane '{plane}' did not return valid PNG"
+
+
+def test_render_view_invalid_clip_plane_raises(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Unknown clip_plane"):
+        render_view(session, "iso", clip_plane="w")
+
+
 # --- measure ---
 
 def test_measure_bounding_box(session):
