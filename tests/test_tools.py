@@ -225,19 +225,19 @@ def test_measure_min_wall_thickness(session):
 
 
 def test_measure_clearance(session):
-    execute_code(session, "show('a', Box(10,10,10))\nshow('b', Box(10,10,10).move(Location((20,0,0))))")
+    execute_code(session, "show(Box(10,10,10), 'a')\nshow(Box(10,10,10).move(Location((20,0,0))), 'b')")
     data = json.loads(measure(session, "clearance", "a", "b"))
     assert abs(data["clearance"] - 10) < 0.1
 
 
 def test_measure_clearance_missing_object2_raises(session):
-    execute_code(session, "show('a', Box(10,10,10))")
+    execute_code(session, "show(Box(10,10,10), 'a')")
     with pytest.raises(ValueError, match="object_name2"):
         measure(session, "clearance", "a")
 
 
 def test_measure_clearance_unknown_object2_raises(session):
-    execute_code(session, "show('a', Box(10,10,10))")
+    execute_code(session, "show(Box(10,10,10), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
         measure(session, "clearance", "a", "missing")
 
@@ -305,17 +305,17 @@ def test_reset_clears_namespace(session):
 
 def test_show_registers_object(session):
     execute_code(session, "box = Box(10, 10, 10)")
-    session.namespace["show"]("mybox", session.current_shape)
+    session.namespace["show"](session.current_shape, "mybox")
     assert "mybox" in session.objects
 
 
 def test_show_callable_from_execute(session):
-    execute_code(session, "box = Box(10, 10, 10)\nshow('mybox', box)")
+    execute_code(session, "box = Box(10, 10, 10)\nshow(box, 'mybox')")
     assert "mybox" in session.objects
 
 
 def test_reset_clears_objects(session):
-    execute_code(session, "show('b', Box(5, 5, 5))")
+    execute_code(session, "show(Box(5, 5, 5), 'b')")
     assert session.objects
     session.reset()
     assert not session.objects
@@ -327,37 +327,37 @@ def test_show_available_after_reset(session):
 
 
 def test_render_view_multiple_objects(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
     png = render_view(session, "iso")
     assert png[:8] == PNG_MAGIC
 
 
 def test_render_view_named_subset(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
     png = render_view(session, "iso", "a")
     assert png[:8] == PNG_MAGIC
 
 
 def test_render_view_unknown_object_raises(session):
-    execute_code(session, "show('a', Box(10, 10, 10))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
         render_view(session, "iso", "missing")
 
 
 def test_measure_named_object(session):
-    execute_code(session, "show('wide', Box(30, 10, 10))")
+    execute_code(session, "show(Box(30, 10, 10), 'wide')")
     data = json.loads(measure(session, "bounding_box", "wide"))
     assert abs(data["xsize"] - 30) < 0.01
 
 
 def test_measure_unknown_object_raises(session):
-    execute_code(session, "show('a', Box(5, 5, 5))")
+    execute_code(session, "show(Box(5, 5, 5), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
         measure(session, "bounding_box", "missing")
 
 
 def test_export_named_object(session, tmp_path):
-    execute_code(session, "show('part', Box(10, 10, 10))")
+    execute_code(session, "show(Box(10, 10, 10), 'part')")
     path = str(tmp_path / "out")
     result = export_file(session, path, "step", "part")
     assert os.path.exists(path + ".step")
@@ -365,7 +365,7 @@ def test_export_named_object(session, tmp_path):
 
 
 def test_export_unknown_object_raises(session, tmp_path):
-    execute_code(session, "show('a', Box(5, 5, 5))")
+    execute_code(session, "show(Box(5, 5, 5), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
         export_file(session, str(tmp_path / "out"), "step", "missing")
 
@@ -383,9 +383,9 @@ def test_save_and_restore_snapshot(session):
 
 
 def test_snapshot_captures_objects_registry(session):
-    execute_code(session, "show('part', Box(10, 10, 10))")
+    execute_code(session, "show(Box(10, 10, 10), 'part')")
     session.save_snapshot("s1")
-    execute_code(session, "show('extra', Box(5, 5, 5))")
+    execute_code(session, "show(Box(5, 5, 5), 'extra')")
     assert "extra" in session.objects
     session.restore_snapshot("s1")
     assert "extra" not in session.objects
@@ -413,36 +413,34 @@ def test_namespace_preserved_after_restore(session):
     assert session.namespace.get("x") == 99
 
 
-# --- show() argument order (issue #11) ---
+# --- show() API: shape first, optional name second (issue #11) ---
 
-def test_show_reversed_args_accepted(session):
+def test_show_with_explicit_name(session):
     execute_code(session, "box = Box(10, 10, 10)")
-    # shape first, name second — should be auto-corrected
     session.namespace["show"](session.current_shape, "mybox")
     assert "mybox" in session.objects
 
 
-def test_show_reversed_args_from_execute(session):
+def test_show_with_explicit_name_from_execute(session):
     execute_code(session, "box = Box(10, 10, 10)\nshow(box, 'mybox')")
     assert "mybox" in session.objects
 
 
-def test_show_bad_args_clear_error(session):
-    execute_code(session, "box = Box(10, 10, 10)")
-    result = execute_code(session, "show(42, None)")
-    assert "show()" in result and "str" in result
+def test_show_without_name_defaults_to_shape(session):
+    execute_code(session, "box = Box(10, 10, 10)\nshow(box)")
+    assert "shape" in session.objects
 
 
 # --- render_view per-object color (issue #12) ---
 
 def test_render_view_per_object_color(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
     png = render_view(session, "iso", "a:blue,b:red")
     assert png[:8] == PNG_MAGIC
 
 
 def test_render_view_mixed_color_and_palette(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
     png = render_view(session, "iso", "a:green,b")
     assert png[:8] == PNG_MAGIC
 
@@ -450,21 +448,21 @@ def test_render_view_mixed_color_and_palette(session):
 # --- interference check (issue #13) ---
 
 def test_interference_overlapping(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Box(10, 10, 10).move(Location((5, 0, 0))))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Box(10, 10, 10).move(Location((5, 0, 0))), 'b')")
     data = json.loads(interference(session, "a", "b"))
     assert data["interferes"] is True
     assert data["volume"] > 0
 
 
 def test_interference_non_overlapping(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Box(10, 10, 10).move(Location((20, 0, 0))))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Box(10, 10, 10).move(Location((20, 0, 0))), 'b')")
     data = json.loads(interference(session, "a", "b"))
     assert data["interferes"] is False
     assert data["volume"] == 0.0
 
 
 def test_interference_returns_bounds(session):
-    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Box(10, 10, 10).move(Location((5, 0, 0))))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Box(10, 10, 10).move(Location((5, 0, 0))), 'b')")
     data = json.loads(interference(session, "a", "b"))
     assert "bounds" in data
     bounds = data["bounds"]
@@ -473,6 +471,6 @@ def test_interference_returns_bounds(session):
 
 
 def test_interference_unknown_object_raises(session):
-    execute_code(session, "show('a', Box(10, 10, 10))")
+    execute_code(session, "show(Box(10, 10, 10), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
         interference(session, "a", "missing")

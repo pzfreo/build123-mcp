@@ -80,7 +80,7 @@ def test_multi_format_export_produces_both_files(session, tmp_path):
 
 def test_multi_format_export_named_object(session, tmp_path):
     """Multi-format export targets the named object, not current_shape."""
-    execute_code(session, "result = Box(5, 5, 5)\nshow('big', Box(40, 40, 40))")
+    execute_code(session, "result = Box(5, 5, 5)\nshow(Box(40, 40, 40), 'big')")
     path = str(tmp_path / "big")
     export_file(session, path, "step,stl", "big")
     # The big box STEP file is distinctly larger than a 5mm box would produce
@@ -181,11 +181,11 @@ def test_snapshot_restores_geometry_after_bad_experiment(session):
 
 def test_snapshot_objects_registry_survives_round_trip(session):
     """Named objects are captured in the snapshot and restored correctly."""
-    execute_code(session, "show('frame', Box(60, 40, 8))\nshow('axle', Cylinder(5, 50))")
+    execute_code(session, "show(Box(60, 40, 8), 'frame')\nshow(Cylinder(5, 50), 'axle')")
     session.save_snapshot("assembly_v1")
 
     # Overwrite both objects
-    execute_code(session, "show('frame', Box(1, 1, 1))\nshow('axle', Box(1, 1, 1))")
+    execute_code(session, "show(Box(1, 1, 1), 'frame')\nshow(Box(1, 1, 1), 'axle')")
     session.restore_snapshot("assembly_v1")
 
     frame_bb = json.loads(measure(session, "bounding_box", "frame"))
@@ -211,7 +211,7 @@ def test_namespace_not_restored_by_snapshot(session):
 
 def test_named_objects_have_independent_bounding_boxes(session):
     """show() isolates shapes: each named object reports its own dimensions."""
-    execute_code(session, "show('small', Box(5, 5, 5))\nshow('large', Box(40, 40, 40))")
+    execute_code(session, "show(Box(5, 5, 5), 'small')\nshow(Box(40, 40, 40), 'large')")
     small = json.loads(measure(session, "bounding_box", "small"))
     large = json.loads(measure(session, "bounding_box", "large"))
     assert abs(small["xsize"] - 5) < 0.01
@@ -220,7 +220,7 @@ def test_named_objects_have_independent_bounding_boxes(session):
 
 def test_assembly_render_differs_from_single_part_render(session):
     """Rendering all registered objects produces a different image than one part alone."""
-    execute_code(session, "show('box', Box(10, 10, 10))\nshow('cyl', Cylinder(3, 30))")
+    execute_code(session, "show(Box(10, 10, 10), 'box')\nshow(Cylinder(3, 30), 'cyl')")
     png_all = render_view(session, "iso")
     png_one = render_view(session, "iso", objects="box")
     assert png_all[:8] == PNG_MAGIC
@@ -230,7 +230,7 @@ def test_assembly_render_differs_from_single_part_render(session):
 
 def test_export_named_object_independent_of_current_shape(session, tmp_path):
     """Exporting a named object writes that shape, not current_shape."""
-    execute_code(session, "result = Box(5, 5, 5)\nshow('big', Box(50, 50, 50))")
+    execute_code(session, "result = Box(5, 5, 5)\nshow(Box(50, 50, 50), 'big')")
     path = str(tmp_path / "big")
     export_file(session, path, "step", "big")
     # The big box STEP file should be larger than a tiny box would produce
@@ -239,7 +239,7 @@ def test_export_named_object_independent_of_current_shape(session, tmp_path):
 
 def test_reset_clears_show_registry(session):
     """After reset, previously registered objects are gone."""
-    execute_code(session, "show('part', Box(10, 10, 10))")
+    execute_code(session, "show(Box(10, 10, 10), 'part')")
     assert "part" in session.objects
     session.reset()
     assert not session.objects
@@ -251,9 +251,9 @@ def test_reset_clears_show_registry(session):
 
 def test_volume_detects_missing_boolean(session):
     """volume() exposes the difference between a solid and a hollowed part."""
-    execute_code(session, "show('full', Box(20, 20, 20))")
+    execute_code(session, "show(Box(20, 20, 20), 'full')")
     solid_vol = json.loads(measure(session, "volume", "full"))["volume"]
-    execute_code(session, "show('hollow', Box(20, 20, 20) - Cylinder(5, 22))")
+    execute_code(session, "show(Box(20, 20, 20) - Cylinder(5, 22), 'hollow')")
     hollow_vol = json.loads(measure(session, "volume", "hollow"))["volume"]
     assert hollow_vol < solid_vol
     assert abs(solid_vol - 8000) < 1
@@ -279,8 +279,8 @@ def test_min_wall_thickness_thinnest_wall_reported(session):
 def test_clearance_between_assembly_parts(session):
     """Clearance query returns the gap between two registered bodies."""
     execute_code(session,
-        "show('shaft', Cylinder(4, 30))\n"
-        "show('bore_housing', Box(30, 30, 30) - Cylinder(5, 32))"
+        "show(Cylinder(4, 30), 'shaft')\n"
+        "show(Box(30, 30, 30) - Cylinder(5, 32), 'bore_housing')"
     )
     data = json.loads(measure(session, "clearance", "shaft", "bore_housing"))
     # shaft radius 4, bore radius 5 — clearance should be ~1mm
@@ -291,8 +291,8 @@ def test_clearance_between_assembly_parts(session):
 def test_clearance_zero_for_touching_shapes(session):
     """Touching shapes report zero clearance."""
     execute_code(session,
-        "show('a', Box(10, 10, 10))\n"
-        "show('b', Box(10, 10, 10).move(Location((10, 0, 0))))"
+        "show(Box(10, 10, 10), 'a')\n"
+        "show(Box(10, 10, 10).move(Location((10, 0, 0))), 'b')"
     )
     data = json.loads(measure(session, "clearance", "a", "b"))
     assert data["clearance"] < 0.01
@@ -348,7 +348,7 @@ def test_mcp_lists_all_tools():
 
     names = asyncio.run(_mcp_session(run))
     assert names == {"execute", "render_view", "measure", "export", "reset",
-                     "save_snapshot", "restore_snapshot"}
+                     "save_snapshot", "restore_snapshot", "interference"}
 
 
 def test_mcp_execute_and_measure_round_trip():
@@ -442,8 +442,8 @@ def test_mcp_volume_and_clearance():
     async def run(mcp):
         await mcp.call_tool("execute", {"code": (
             "from build123d import *\n"
-            "show('a', Box(10, 10, 10))\n"
-            "show('b', Box(10, 10, 10).move(Location((15, 0, 0))))"
+            "show(Box(10, 10, 10), 'a')\n"
+            "show(Box(10, 10, 10).move(Location((15, 0, 0))), 'b')"
         )})
         r_vol = await mcp.call_tool("measure", {"query": "volume", "object_name": "a"})
         r_cl = await mcp.call_tool("measure", {"query": "clearance", "object_name": "a", "object_name2": "b"})
@@ -459,7 +459,7 @@ def test_mcp_show_and_measure_named_object():
     async def run(mcp):
         await mcp.call_tool(
             "execute",
-            {"code": "from build123d import *\nshow('wide', Box(40, 5, 5))\nshow('tall', Box(5, 5, 40))"},
+            {"code": "from build123d import *\nshow(Box(40, 5, 5), 'wide')\nshow(Box(5, 5, 40), 'tall')"},
         )
         r_wide = await mcp.call_tool("measure", {"query": "bounding_box", "object_name": "wide"})
         r_tall = await mcp.call_tool("measure", {"query": "bounding_box", "object_name": "tall"})

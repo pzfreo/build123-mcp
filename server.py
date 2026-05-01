@@ -13,7 +13,7 @@ _session = Session()
 
 @mcp.tool()
 def execute(code: str) -> str:
-    """Execute build123d Python code in the persistent session. Use show(name, shape) to register named objects."""
+    """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects; name is optional and defaults to 'shape'."""
     return execute_code(_session, code)
 
 

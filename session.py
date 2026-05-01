@@ -23,14 +23,9 @@ class Session:
         self.namespace["__builtins__"] = make_restricted_builtins()
         objects = self.objects
 
-        def show(name, shape):
-            if not isinstance(name, str) and isinstance(shape, str):
-                name, shape = shape, name
-            elif not isinstance(name, str):
-                raise TypeError(
-                    f"show() expects show(name: str, shape). "
-                    f"Got show({type(name).__name__}, {type(shape).__name__ if shape is not None else 'None'})"
-                )
+        def show(shape, name=None):
+            if name is None:
+                name = "shape"
             objects[name] = shape
 
         self.namespace["show"] = show
