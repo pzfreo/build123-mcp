@@ -57,31 +57,6 @@ wheels = [
 ]
 
 [[package]]
-name = "build123-mcp"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "build123d" },
-    { name = "mcp" },
-    { name = "pyvista" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "build123d" },
-    { name = "mcp" },
-    { name = "pyvista" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest" }]
-
-[[package]]
 name = "build123d"
 version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -108,6 +83,31 @@ sdist = { url = "https://files.pythonhosted.org/packages/7e/00/b56ebe1d2a31611db
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f3/5a/0fe9cc610a6d07eaaddd80629a49ea18ecf9acefb81c6788a854f0dea224/build123d-0.10.0-py3-none-any.whl", hash = "sha256:589f397b1dc7c85c9936aa7b2ee39946cc226a121e14a621b6749263aae5ed7d", size = 278755, upload-time = "2025-11-05T22:04:35.222Z" },
 ]
+
+[[package]]
+name = "build123d-mcp"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "build123d" },
+    { name = "mcp" },
+    { name = "pyvista" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build123d" },
+    { name = "mcp" },
+    { name = "pyvista" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest" }]
 
 [[package]]
 name = "cadquery-ocp"
@@ -633,7 +633,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [

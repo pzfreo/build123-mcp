@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "build123-mcp": {
+    "build123d-mcp": {
       "command": "uv",
       "args": ["run", "python", "server.py"],
       "cwd": "/app/workspaces/pzfreo/build123-mcp"
