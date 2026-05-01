@@ -8,6 +8,11 @@ _PALETTE = [
     "lightyellow", "plum", "peachpuff", "lightcyan",
 ]
 
+_QUALITY = {
+    "standard": {"linear_deflection": 0.001, "angular_deflection": 0.1},
+    "high":     {"linear_deflection": 0.0005, "angular_deflection": 0.02},
+}
+
 
 def _init_display():
     global _display_initialized
@@ -36,12 +41,27 @@ def _resolve_shapes(session, objects: str):
     raise ValueError("No shape in session. Execute code to create geometry first.")
 
 
-def render_view(session, direction: str = "iso", objects: str = "") -> bytes:
+def render_view(
+    session,
+    direction: str = "iso",
+    objects: str = "",
+    quality: str = "standard",
+    clip_plane: str = "",
+) -> bytes:
     direction = direction.lower()
     if direction not in ("top", "front", "side", "iso"):
         raise ValueError(f"Unknown direction '{direction}'. Use: top, front, side, iso")
 
+    quality = quality.lower()
+    if quality not in _QUALITY:
+        raise ValueError(f"Unknown quality '{quality}'. Use: standard, high")
+
+    clip_plane = clip_plane.lower()
+    if clip_plane and clip_plane not in ("x", "y", "z"):
+        raise ValueError(f"Unknown clip_plane '{clip_plane}'. Use: x, y, z")
+
     shapes = _resolve_shapes(session, objects)
+    tess = _QUALITY[quality]
 
     _init_display()
     import pyvista as pv
@@ -54,9 +74,15 @@ def render_view(session, direction: str = "iso", objects: str = "") -> bytes:
         for i, (name, shape) in enumerate(shapes):
             stl_path = os.path.join(tmpdir, f"shape_{i}.stl")
             mesher = Mesher()
-            mesher.add_shape(shape)
+            mesher.add_shape(shape, **tess)
             mesher.write(stl_path)
             mesh = pv.read(stl_path)
+
+            if clip_plane:
+                center = mesh.center
+                origin = list(center)
+                mesh = mesh.clip(normal=clip_plane, origin=origin, invert=False)
+
             plotter.add_mesh(
                 mesh,
                 color=_PALETTE[i % len(_PALETTE)],

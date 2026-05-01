@@ -17,9 +17,9 @@ def execute(code: str) -> str:
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "") -> Image:
-    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names to show (default: all registered, or current shape)."""
-    png_bytes = render_view_fn(_session, direction, objects)
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "") -> Image:
+    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names (default: all). quality: standard, high. clip_plane: x, y, or z to slice at midpoint."""
+    png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane)
     return Image(data=png_bytes, format="png")
 
 
