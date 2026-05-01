@@ -1,4 +1,5 @@
 import os
+from pathlib import PurePosixPath, PureWindowsPath
 
 
 def export_file(session, filename: str, format: str = "step") -> str:
@@ -10,18 +11,24 @@ def export_file(session, filename: str, format: str = "step") -> str:
     if fmt not in ("step", "stl"):
         raise ValueError(f"Unknown format '{fmt}'. Use: step, stl")
 
+    # Reject path traversal attempts
+    if ".." in PurePosixPath(filename).parts or ".." in PureWindowsPath(filename).parts:
+        raise ValueError("Path traversal not allowed.")
+
     if fmt == "step" and not filename.lower().endswith((".step", ".stp")):
         filename += ".step"
     elif fmt == "stl" and not filename.lower().endswith(".stl"):
         filename += ".stl"
 
+    abs_path = os.path.realpath(filename)
+
     if fmt == "step":
         from build123d import export_step
-        export_step(shape, filename)
+        export_step(shape, abs_path)
     else:
         from build123d import Mesher
         mesher = Mesher()
         mesher.add_shape(shape)
-        mesher.write(filename)
+        mesher.write(abs_path)
 
-    return f"Exported to {os.path.abspath(filename)}"
+    return f"Exported to {abs_path}"

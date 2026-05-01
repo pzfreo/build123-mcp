@@ -128,6 +128,12 @@ def test_export_invalid_format(session):
         export_file(session, "out", "obj")
 
 
+def test_export_path_traversal_rejected(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Path traversal"):
+        export_file(session, "../../etc/passwd", "step")
+
+
 # --- reset ---
 
 def test_reset_clears_shape(session):
