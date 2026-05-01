@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies for headless rendering
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libgl1-mesa-glx libglu1-mesa xvfb libxrender1 libxi6
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run tests
+        run: uv run pytest tests/ -v
