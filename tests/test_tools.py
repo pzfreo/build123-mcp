@@ -20,6 +20,14 @@ def session():
     return s
 
 
+@pytest.fixture
+def fast_session():
+    """Session with a 1-second exec timeout for testing timeout behaviour."""
+    s = Session(exec_timeout=1)
+    s.execute("from build123d import *")
+    return s
+
+
 # --- execute ---
 
 def test_execute_persists_state(session):
@@ -47,6 +55,75 @@ def test_execute_creates_shape(session):
 def test_execute_detects_buildpart(session):
     execute_code(session, "with BuildPart() as p:\n    Box(10, 10, 10)")
     assert session.current_shape is not None
+
+
+# --- security ---
+
+def test_import_os_blocked(session):
+    result = execute_code(session, "import os")
+    assert "SecurityError" in result or "not allowed" in result.lower()
+
+
+def test_import_subprocess_blocked(session):
+    result = execute_code(session, "import subprocess")
+    assert "not allowed" in result.lower()
+
+
+def test_from_os_import_blocked(session):
+    result = execute_code(session, "from os import getcwd")
+    assert "not allowed" in result.lower()
+
+
+def test_import_socket_blocked(session):
+    result = execute_code(session, "import socket")
+    assert "not allowed" in result.lower()
+
+
+def test_import_pathlib_blocked(session):
+    result = execute_code(session, "import pathlib")
+    assert "not allowed" in result.lower()
+
+
+def test_eval_call_blocked(session):
+    result = execute_code(session, "eval('1+1')")
+    assert "not allowed" in result.lower()
+
+
+def test_exec_call_blocked(session):
+    result = execute_code(session, "exec('x=1')")
+    assert "not allowed" in result.lower()
+
+
+def test_open_call_blocked(session):
+    result = execute_code(session, "open('/etc/passwd')")
+    assert "not allowed" in result.lower()
+
+
+def test_open_removed_from_builtins(session):
+    # open is blocked by builtins restriction even if AST check were bypassed
+    assert "open" not in session.namespace.get("__builtins__", {})
+
+
+def test_import_math_allowed(session):
+    result = execute_code(session, "import math\nx = math.pi")
+    assert "Error" not in result
+
+
+def test_import_build123d_allowed(session):
+    result = execute_code(session, "from build123d import *\nresult = Box(1, 1, 1)")
+    assert "Error" not in result
+
+
+def test_execution_timeout(fast_session):
+    result = execute_code(fast_session, "while True: pass")
+    assert "timeout" in result.lower() or "time limit" in result.lower()
+
+
+def test_blocked_import_does_not_corrupt_shape(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    shape_before = session.current_shape
+    execute_code(session, "import os")
+    assert session.current_shape is shape_before
 
 
 # --- render_view ---

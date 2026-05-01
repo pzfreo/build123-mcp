@@ -118,6 +118,50 @@ def test_error_in_execute_preserves_current_shape(session):
 
 
 # ---------------------------------------------------------------------------
+# Security: injection resistance
+# ---------------------------------------------------------------------------
+
+def test_shell_injection_attempt_blocked(session):
+    """A prompt-injection payload trying to run a shell command is rejected."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    shape_before = session.current_shape
+    result = execute_code(session, "import subprocess; subprocess.run(['id'])")
+    assert "not allowed" in result.lower() or "SecurityError" in result
+    # Geometry is intact
+    assert session.current_shape is shape_before
+
+
+def test_filesystem_read_attempt_blocked(session):
+    """Attempting to read a file via open() is rejected."""
+    result = execute_code(session, "data = open('/etc/passwd').read()")
+    assert "not allowed" in result.lower() or "Error" in result
+
+
+def test_network_access_attempt_blocked(session):
+    """Attempting to open a network socket is rejected."""
+    result = execute_code(session, "import socket; socket.create_connection(('1.1.1.1', 80))")
+    assert "not allowed" in result.lower() or "SecurityError" in result
+
+
+def test_normal_workflow_unaffected_by_security(session):
+    """Security hardening does not break a legitimate build123d session."""
+    execute_code(session, "import math\nresult = Cylinder(math.pi, 20)")
+    assert session.current_shape is not None
+    bb = json.loads(measure(session, "bounding_box"))
+    assert bb["zsize"] > 0
+
+
+def test_builtins_import_restriction_independent_of_ast(session):
+    """The builtins __import__ restriction provides a second layer: even if a
+    future change widened the AST allowlist, the namespace-level filter still
+    blocks non-allowlisted imports at runtime."""
+    # Bypass AST by calling __import__ through builtins dict directly
+    restricted_import = session.namespace["__builtins__"]["__import__"]
+    with pytest.raises(ImportError, match="not allowed"):
+        restricted_import("os")
+
+
+# ---------------------------------------------------------------------------
 # Session snapshots
 # ---------------------------------------------------------------------------
 
@@ -351,6 +395,20 @@ def test_mcp_reset_clears_state():
 
     text = asyncio.run(_mcp_session(run))
     assert "No shape" in text
+
+
+def test_mcp_injection_attempt_returns_error_not_executes():
+    """A shell-injection payload through the MCP wire returns an error and does
+    not produce side-effects (geometry is still None at the start of the session)."""
+    async def run(mcp):
+        result = await mcp.call_tool(
+            "execute",
+            {"code": "import subprocess; subprocess.run(['id'], capture_output=True)"},
+        )
+        return result.content[0].text
+
+    text = asyncio.run(_mcp_session(run))
+    assert "not allowed" in text.lower() or "SecurityError" in text
 
 
 def test_mcp_snapshot_save_and_restore():
