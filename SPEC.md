@@ -1,5 +1,7 @@
 # build123d-mcp — Specification
 
+> **Historical document.** This spec was written before the initial implementation. The current codebase has diverged significantly: there are now seven tools (not five), rendering uses pyvista not SVG, snapshots and interference checking have been added, and the package is structured as a `src` layout with a PyPI entry point. Refer to `llms.md` for the authoritative tool reference and `README.md` for setup.
+
 ## Purpose
 
 An MCP server that wraps build123d, enabling an AI assistant to build, inspect,

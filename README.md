@@ -8,7 +8,7 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 
 ## Tools
 
-- `execute` — run build123d Python code in a persistent session; use `show(name, shape)` to register named parts
+- `execute` — run build123d Python code in a persistent session; use `show(shape, name)` to register named parts
 - `render_view` — render one or more shapes as PNG; supports assembly compositing, high-quality tessellation, and cross-section clip planes
 - `measure` — query bounding box, volume, surface area, minimum wall thickness, or clearance between two named bodies
 - `export` — export as STEP, STL, or both in one call; targets a named object or the current shape
@@ -19,43 +19,26 @@ See [llms.md](llms.md) for full tool reference and usage patterns.
 
 ## Requirements
 
-- Python 3.10+
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-- build123d, pyvista (installed automatically via uv)
+- [uv](https://github.com/astral-sh/uv)
 - An MCP-compatible client (Claude Code, Claude Desktop, Cursor, etc.)
+
+All Python dependencies (build123d, pyvista, etc.) are installed automatically by uv.
 
 ## Installation
 
-Clone the repository:
+No clone needed. Install directly from PyPI:
 
 ```bash
-git clone https://github.com/pzfreo/build123d-mcp
-cd build123d-mcp
+pip install build123d-mcp
 ```
 
-Install dependencies with uv:
-
-```bash
-uv sync
-```
-
-Or with pip:
-
-```bash
-pip install -e .
-```
+Or just use `uvx` — it fetches and runs the package in one step with no prior install required (see below).
 
 ---
 
 ## Adding to MCP clients
 
-The server runs over stdio — the client launches it as a subprocess. The command in all cases is:
-
-```
-uv run python server.py
-```
-
-run from the `build123d-mcp` directory.
+The server runs over stdio — the client launches it as a subprocess using `uvx build123d-mcp`.
 
 ### Claude Code
 
@@ -65,9 +48,8 @@ Add to your project's `.mcp.json` (or `~/.claude/mcp.json` for global use):
 {
   "mcpServers": {
     "build123d-mcp": {
-      "command": "uv",
-      "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123d-mcp"
+      "command": "uvx",
+      "args": ["build123d-mcp"]
     }
   }
 }
@@ -83,9 +65,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 {
   "mcpServers": {
     "build123d-mcp": {
-      "command": "uv",
-      "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123d-mcp"
+      "command": "uvx",
+      "args": ["build123d-mcp"]
     }
   }
 }
@@ -101,9 +82,8 @@ Open **Settings → MCP** and add a new server entry, or edit `~/.cursor/mcp.jso
 {
   "mcpServers": {
     "build123d-mcp": {
-      "command": "uv",
-      "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123d-mcp"
+      "command": "uvx",
+      "args": ["build123d-mcp"]
     }
   }
 }
@@ -118,9 +98,8 @@ For **Continue** extension, add to `.continue/config.json`:
   "mcpServers": [
     {
       "name": "build123d-mcp",
-      "command": "uv",
-      "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123d-mcp"
+      "command": "uvx",
+      "args": ["build123d-mcp"]
     }
   ]
 }
@@ -133,9 +112,8 @@ For **GitHub Copilot** with MCP support, add to `.vscode/mcp.json` in your works
   "servers": {
     "build123d-mcp": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123d-mcp"
+      "command": "uvx",
+      "args": ["build123d-mcp"]
     }
   }
 }
@@ -151,4 +129,4 @@ For best results, paste the contents of [default_prompt.md](default_prompt.md) a
 
 ## Status
 
-Active development (v0.2.0).
+Active development (v0.1.0).
