@@ -1,16 +1,26 @@
 import io
 from contextlib import redirect_stdout, redirect_stderr
 
+from security import (
+    EXEC_TIMEOUT_SECONDS,
+    ExecutionTimeout,
+    check_ast,
+    exec_with_timeout,
+    make_restricted_builtins,
+)
+
 
 class Session:
-    def __init__(self):
+    def __init__(self, exec_timeout: int = EXEC_TIMEOUT_SECONDS):
+        self.exec_timeout = exec_timeout
         self.namespace = {}
         self.current_shape = None
         self.objects = {}
-        self.snapshots = {}  # name -> {"current_shape": ..., "objects": {...}}
+        self.snapshots = {}
         self._inject_builtins()
 
     def _inject_builtins(self):
+        self.namespace["__builtins__"] = make_restricted_builtins()
         objects = self.objects
 
         def show(name, shape):
@@ -19,13 +29,27 @@ class Session:
         self.namespace["show"] = show
 
     def execute(self, code: str) -> str:
+        # Layer 1: AST check before anything runs
+        try:
+            check_ast(code)
+        except ValueError as e:
+            return f"Error: SecurityError: {e}"
+
+        try:
+            compiled = compile(code, "<mcp>", "exec")
+        except SyntaxError as e:
+            return f"Error: SyntaxError: {e}"
+
         buf = io.StringIO()
         keys_before = set(self.namespace.keys())
         try:
             with redirect_stdout(buf), redirect_stderr(buf):
-                exec(compile(code, "<mcp>", "exec"), self.namespace)
+                # Layer 3: timeout wraps the actual exec
+                exec_with_timeout(compiled, self.namespace, self.exec_timeout)
             new_keys = set(self.namespace.keys()) - keys_before
             self._update_current_shape(new_keys)
+        except ExecutionTimeout as e:
+            return f"Error: ExecutionTimeout: {e}"
         except Exception as e:
             return f"Error: {type(e).__name__}: {e}"
         output = buf.getvalue()
