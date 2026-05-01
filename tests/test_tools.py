@@ -290,3 +290,46 @@ def test_export_unknown_object_raises(session, tmp_path):
     execute_code(session, "show('a', Box(5, 5, 5))")
     with pytest.raises(ValueError, match="Unknown object"):
         export_file(session, str(tmp_path / "out"), "step", "missing")
+
+
+# --- snapshots ---
+
+def test_save_and_restore_snapshot(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    shape_before = session.current_shape
+    session.save_snapshot("v1")
+    execute_code(session, "result = Box(99, 99, 99)")
+    assert session.current_shape is not shape_before
+    session.restore_snapshot("v1")
+    assert session.current_shape is shape_before
+
+
+def test_snapshot_captures_objects_registry(session):
+    execute_code(session, "show('part', Box(10, 10, 10))")
+    session.save_snapshot("s1")
+    execute_code(session, "show('extra', Box(5, 5, 5))")
+    assert "extra" in session.objects
+    session.restore_snapshot("s1")
+    assert "extra" not in session.objects
+    assert "part" in session.objects
+
+
+def test_restore_unknown_snapshot_raises(session):
+    with pytest.raises(KeyError, match="no_such"):
+        session.restore_snapshot("no_such")
+
+
+def test_reset_clears_snapshots(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("v1")
+    session.reset()
+    assert not session.snapshots
+
+
+def test_namespace_preserved_after_restore(session):
+    execute_code(session, "x = 42")
+    session.save_snapshot("s1")
+    execute_code(session, "x = 99")
+    session.restore_snapshot("s1")
+    # namespace is NOT restored — x stays at 99
+    assert session.namespace.get("x") == 99

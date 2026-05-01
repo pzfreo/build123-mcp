@@ -7,6 +7,7 @@ class Session:
         self.namespace = {}
         self.current_shape = None
         self.objects = {}
+        self.snapshots = {}  # name -> {"current_shape": ..., "objects": {...}}
         self._inject_builtins()
 
     def _inject_builtins(self):
@@ -58,8 +59,23 @@ class Session:
                 self.current_shape = obj
                 return
 
+    def save_snapshot(self, name: str) -> None:
+        self.snapshots[name] = {
+            "current_shape": self.current_shape,
+            "objects": dict(self.objects),
+        }
+
+    def restore_snapshot(self, name: str) -> None:
+        if name not in self.snapshots:
+            raise KeyError(f"No snapshot named '{name}'. Available: {list(self.snapshots.keys())}")
+        snap = self.snapshots[name]
+        self.current_shape = snap["current_shape"]
+        self.objects.clear()
+        self.objects.update(snap["objects"])
+
     def reset(self):
         self.namespace.clear()
         self.current_shape = None
         self.objects.clear()
+        self.snapshots.clear()
         self._inject_builtins()

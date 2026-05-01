@@ -36,8 +36,32 @@ def export(filename: str, format: str = "step", object_name: str = "") -> str:
 
 
 @mcp.tool()
+def save_snapshot(name: str) -> str:
+    """Save a named checkpoint of the current geometric state (current_shape and the show() object registry).
+    The Python variable namespace is NOT saved — only geometry. Call this before risky experiments so you can
+    restore known-good geometry without re-running all prior execute() calls."""
+    _session.save_snapshot(name)
+    saved = ["current_shape"] + list(_session.snapshots[name]["objects"].keys())
+    return f"Snapshot '{name}' saved. Geometry captured: {', '.join(saved) if saved else 'none'}."
+
+
+@mcp.tool()
+def restore_snapshot(name: str) -> str:
+    """Restore geometric state from a previously saved snapshot (current_shape and the show() registry).
+    The Python variable namespace is NOT restored — execute() calls made after the snapshot are still in scope,
+    but current_shape and all show() objects revert to what they were at snapshot time.
+    Raises an error if the snapshot name does not exist."""
+    try:
+        _session.restore_snapshot(name)
+    except KeyError as e:
+        return f"Error: {e}"
+    restored = ["current_shape"] + list(_session.objects.keys())
+    return f"Snapshot '{name}' restored. Active geometry: {', '.join(restored) if restored else 'none'}."
+
+
+@mcp.tool()
 def reset() -> str:
-    """Clear the current session back to empty state."""
+    """Clear the current session back to empty state, including all snapshots."""
     _session.reset()
     return "Session reset."
 
