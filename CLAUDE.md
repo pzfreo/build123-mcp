@@ -8,6 +8,8 @@ Always use `uv run pytest` — it auto-installs all dependencies from `pyproject
 uv run pytest tests/
 ```
 
+The target is 100% passing. There are no accepted pre-existing failures — if tests are failing, fix them.
+
 ## Running the server
 
 ```
