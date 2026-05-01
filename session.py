@@ -23,7 +23,9 @@ class Session:
         self.namespace["__builtins__"] = make_restricted_builtins()
         objects = self.objects
 
-        def show(name, shape):
+        def show(shape, name=None):
+            if name is None:
+                name = "shape"
             objects[name] = shape
 
         self.namespace["show"] = show
