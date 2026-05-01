@@ -5,6 +5,7 @@ from tools.execute import execute_code
 from tools.render import render_view as render_view_fn
 from tools.measure import measure as measure_fn
 from tools.export import export_file
+from tools.interference import interference as interference_fn
 
 mcp = FastMCP("build123-mcp")
 _session = Session()
@@ -18,7 +19,7 @@ def execute(code: str) -> str:
 
 @mcp.tool()
 def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "") -> Image:
-    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names (default: all). quality: standard, high. clip_plane: x, y, or z to slice at midpoint."""
+    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, or z to slice at midpoint."""
     png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane)
     return Image(data=png_bytes, format="png")
 
@@ -33,6 +34,12 @@ def measure(query: str = "bounding_box", object_name: str = "", object_name2: st
 def export(filename: str, format: str = "step", object_name: str = "") -> str:
     """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show() (default: current shape)."""
     return export_file(_session, filename, format, object_name)
+
+
+@mcp.tool()
+def interference(object_a: str, object_b: str) -> str:
+    """Check whether two named objects (from show()) intersect. Returns interferes (bool), volume (mm³ of overlap), and bounds of the interference region."""
+    return interference_fn(_session, object_a, object_b)
 
 
 @mcp.tool()

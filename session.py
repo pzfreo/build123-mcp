@@ -24,6 +24,13 @@ class Session:
         objects = self.objects
 
         def show(name, shape):
+            if not isinstance(name, str) and isinstance(shape, str):
+                name, shape = shape, name
+            elif not isinstance(name, str):
+                raise TypeError(
+                    f"show() expects show(name: str, shape). "
+                    f"Got show({type(name).__name__}, {type(shape).__name__ if shape is not None else 'None'})"
+                )
             objects[name] = shape
 
         self.namespace["show"] = show

@@ -27,17 +27,26 @@ def _init_display():
 
 
 def _resolve_shapes(session, objects: str):
-    """Return list of (name, shape) tuples based on objects selector."""
+    """Return list of (name, shape, color_or_None) tuples based on objects selector.
+
+    Each entry in the comma-separated objects string may be 'name' or 'name:color'.
+    """
     if objects:
-        names = [n.strip() for n in objects.split(",") if n.strip()]
-        missing = [n for n in names if n not in session.objects]
-        if missing:
-            raise ValueError(f"Unknown object(s): {', '.join(missing)}")
-        return [(n, session.objects[n]) for n in names]
+        result = []
+        for entry in [e.strip() for e in objects.split(",") if e.strip()]:
+            if ":" in entry:
+                name, color = entry.split(":", 1)
+                name, color = name.strip(), color.strip()
+            else:
+                name, color = entry, None
+            if name not in session.objects:
+                raise ValueError(f"Unknown object(s): {name}")
+            result.append((name, session.objects[name], color))
+        return result
     if session.objects:
-        return list(session.objects.items())
+        return [(n, s, None) for n, s in session.objects.items()]
     if session.current_shape is not None:
-        return [("shape", session.current_shape)]
+        return [("shape", session.current_shape, None)]
     raise ValueError("No shape in session. Execute code to create geometry first.")
 
 
@@ -71,7 +80,7 @@ def render_view(
         png_path = os.path.join(tmpdir, "render.png")
         plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
 
-        for i, (name, shape) in enumerate(shapes):
+        for i, (name, shape, obj_color) in enumerate(shapes):
             stl_path = os.path.join(tmpdir, f"shape_{i}.stl")
             mesher = Mesher()
             mesher.add_shape(shape, **tess)
@@ -85,7 +94,7 @@ def render_view(
 
             plotter.add_mesh(
                 mesh,
-                color=_PALETTE[i % len(_PALETTE)],
+                color=obj_color if obj_color else _PALETTE[i % len(_PALETTE)],
                 smooth_shading=True,
                 ambient=0.3,
                 diffuse=0.7,

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from session import Session
 from tools.execute import execute_code
 from tools.export import export_file
+from tools.interference import interference
 from tools.measure import measure
 from tools.render import render_view
 
@@ -410,3 +411,68 @@ def test_namespace_preserved_after_restore(session):
     session.restore_snapshot("s1")
     # namespace is NOT restored — x stays at 99
     assert session.namespace.get("x") == 99
+
+
+# --- show() argument order (issue #11) ---
+
+def test_show_reversed_args_accepted(session):
+    execute_code(session, "box = Box(10, 10, 10)")
+    # shape first, name second — should be auto-corrected
+    session.namespace["show"](session.current_shape, "mybox")
+    assert "mybox" in session.objects
+
+
+def test_show_reversed_args_from_execute(session):
+    execute_code(session, "box = Box(10, 10, 10)\nshow(box, 'mybox')")
+    assert "mybox" in session.objects
+
+
+def test_show_bad_args_clear_error(session):
+    execute_code(session, "box = Box(10, 10, 10)")
+    result = execute_code(session, "show(42, None)")
+    assert "show()" in result and "str" in result
+
+
+# --- render_view per-object color (issue #12) ---
+
+def test_render_view_per_object_color(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    png = render_view(session, "iso", "a:blue,b:red")
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_mixed_color_and_palette(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    png = render_view(session, "iso", "a:green,b")
+    assert png[:8] == PNG_MAGIC
+
+
+# --- interference check (issue #13) ---
+
+def test_interference_overlapping(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Box(10, 10, 10).move(Location((5, 0, 0))))")
+    data = json.loads(interference(session, "a", "b"))
+    assert data["interferes"] is True
+    assert data["volume"] > 0
+
+
+def test_interference_non_overlapping(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Box(10, 10, 10).move(Location((20, 0, 0))))")
+    data = json.loads(interference(session, "a", "b"))
+    assert data["interferes"] is False
+    assert data["volume"] == 0.0
+
+
+def test_interference_returns_bounds(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Box(10, 10, 10).move(Location((5, 0, 0))))")
+    data = json.loads(interference(session, "a", "b"))
+    assert "bounds" in data
+    bounds = data["bounds"]
+    for key in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"):
+        assert key in bounds
+
+
+def test_interference_unknown_object_raises(session):
+    execute_code(session, "show('a', Box(10, 10, 10))")
+    with pytest.raises(ValueError, match="Unknown object"):
+        interference(session, "a", "missing")
