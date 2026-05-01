@@ -1,4 +1,4 @@
-# build123-mcp
+# build123d-mcp
 
 ## Running tests
 

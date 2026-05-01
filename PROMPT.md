@@ -1,4 +1,4 @@
-# Session Prompt — build123-mcp
+# Session Prompt — build123d-mcp
 
 ## What we are building
 
@@ -9,7 +9,7 @@ files — rather than writing complete scripts blind.
 
 ## Repo
 
-https://github.com/pzfreo/build123-mcp
+https://github.com/pzfreo/build123d-mcp
 
 The repo already contains:
 - `README.md` — project overview

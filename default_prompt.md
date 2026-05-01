@@ -1,6 +1,6 @@
-# Default system prompt for build123-mcp
+# Default system prompt for build123d-mcp
 
-Use this as a system prompt when configuring an AI assistant to work with the build123-mcp MCP server.
+Use this as a system prompt when configuring an AI assistant to work with the build123d-mcp MCP server.
 
 ---
 

@@ -1,6 +1,6 @@
-# build123-mcp — LLM Reference
+# build123d-mcp — LLM Reference
 
-build123-mcp is an MCP server that wraps the [build123d](https://github.com/gumyr/build123d) Python CAD library. It gives you seven tools to build 3D geometry incrementally, render views, measure dimensions, export files, snapshot state, and reset.
+build123d-mcp is an MCP server that wraps the [build123d](https://github.com/gumyr/build123d) Python CAD library. It gives you seven tools to build 3D geometry incrementally, render views, measure dimensions, export files, snapshot state, and reset.
 
 ## Key concept: persistent session
 

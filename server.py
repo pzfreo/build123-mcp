@@ -7,7 +7,7 @@ from tools.measure import measure as measure_fn
 from tools.export import export_file
 from tools.interference import interference as interference_fn
 
-mcp = FastMCP("build123-mcp")
+mcp = FastMCP("build123d-mcp")
 _session = Session()
 
 

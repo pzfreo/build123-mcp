@@ -1,4 +1,4 @@
-# build123-mcp
+# build123d-mcp
 
 An MCP (Model Context Protocol) server that exposes build123d CAD operations as tools, enabling AI assistants to build, inspect, and iterate on 3D geometry interactively.
 
@@ -29,8 +29,8 @@ See [llms.md](llms.md) for full tool reference and usage patterns.
 Clone the repository:
 
 ```bash
-git clone https://github.com/pzfreo/build123-mcp
-cd build123-mcp
+git clone https://github.com/pzfreo/build123d-mcp
+cd build123d-mcp
 ```
 
 Install dependencies with uv:
@@ -55,7 +55,7 @@ The server runs over stdio — the client launches it as a subprocess. The comma
 uv run python server.py
 ```
 
-run from the `build123-mcp` directory.
+run from the `build123d-mcp` directory.
 
 ### Claude Code
 
@@ -64,10 +64,10 @@ Add to your project's `.mcp.json` (or `~/.claude/mcp.json` for global use):
 ```json
 {
   "mcpServers": {
-    "build123-mcp": {
+    "build123d-mcp": {
       "command": "uv",
       "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123-mcp"
+      "cwd": "/path/to/build123d-mcp"
     }
   }
 }
@@ -82,10 +82,10 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 ```json
 {
   "mcpServers": {
-    "build123-mcp": {
+    "build123d-mcp": {
       "command": "uv",
       "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123-mcp"
+      "cwd": "/path/to/build123d-mcp"
     }
   }
 }
@@ -100,10 +100,10 @@ Open **Settings → MCP** and add a new server entry, or edit `~/.cursor/mcp.jso
 ```json
 {
   "mcpServers": {
-    "build123-mcp": {
+    "build123d-mcp": {
       "command": "uv",
       "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123-mcp"
+      "cwd": "/path/to/build123d-mcp"
     }
   }
 }
@@ -117,10 +117,10 @@ For **Continue** extension, add to `.continue/config.json`:
 {
   "mcpServers": [
     {
-      "name": "build123-mcp",
+      "name": "build123d-mcp",
       "command": "uv",
       "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123-mcp"
+      "cwd": "/path/to/build123d-mcp"
     }
   ]
 }
@@ -131,11 +131,11 @@ For **GitHub Copilot** with MCP support, add to `.vscode/mcp.json` in your works
 ```json
 {
   "servers": {
-    "build123-mcp": {
+    "build123d-mcp": {
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "server.py"],
-      "cwd": "/path/to/build123-mcp"
+      "cwd": "/path/to/build123d-mcp"
     }
   }
 }

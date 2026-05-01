@@ -2,7 +2,7 @@
 
 ## Threat model
 
-build123-mcp executes AI-generated Python code via `exec()`. The primary threat is **prompt injection**: malicious content in a file or web page that the user asks an AI to analyse causes the AI to call `execute()` with a payload intended to read files, exfiltrate data, run shell commands, or open network connections.
+build123d-mcp executes AI-generated Python code via `exec()`. The primary threat is **prompt injection**: malicious content in a file or web page that the user asks an AI to analyse causes the AI to call `execute()` with a payload intended to read files, exfiltrate data, run shell commands, or open network connections.
 
 This is a local development tool. It is not designed for multi-tenant or production deployments.
 
@@ -99,4 +99,4 @@ If you are running this server in an environment where the input is not trusted 
 
 ## Reporting security issues
 
-Open an issue at https://github.com/pzfreo/build123-mcp/issues and label it `security`.
+Open an issue at https://github.com/pzfreo/build123d-mcp/issues and label it `security`.

@@ -1,4 +1,4 @@
-# build123-mcp — Specification
+# build123d-mcp — Specification
 
 ## Purpose
 
@@ -76,7 +76,7 @@ Start with SVG projection for v1 — simple and dependency-free. Upgrade to
 ## File Structure
 
 ```
-build123-mcp/
+build123d-mcp/
   server.py        # MCP server entry point
   session.py       # persistent build123d session management
   tools/
