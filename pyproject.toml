@@ -1,16 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "build123d-mcp"
 version = "0.1.0"
 description = "MCP server wrapping build123d for interactive 3D CAD"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Paul Fremantle", email = "pzfreo@gmail.com" }]
+keywords = ["mcp", "build123d", "cad", "3d", "ai"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "mcp",
     "build123d",
     "pyvista",
 ]
 
-[dependency-groups]
-dev = ["pytest"]
+[project.urls]
+Homepage = "https://github.com/pzfreo/build123d-mcp"
+Repository = "https://github.com/pzfreo/build123d-mcp"
+Issues = "https://github.com/pzfreo/build123d-mcp/issues"
 
 [project.scripts]
-build123d-mcp = "server:main"
+build123d-mcp = "build123d_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/build123d_mcp"]
+
+[dependency-groups]
+dev = ["pytest"]

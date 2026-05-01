@@ -1,11 +1,11 @@
 from mcp.server.fastmcp import FastMCP, Image
 
-from session import Session
-from tools.execute import execute_code
-from tools.render import render_view as render_view_fn
-from tools.measure import measure as measure_fn
-from tools.export import export_file
-from tools.interference import interference as interference_fn
+from build123d_mcp.session import Session
+from build123d_mcp.tools.execute import execute_code
+from build123d_mcp.tools.render import render_view as render_view_fn
+from build123d_mcp.tools.measure import measure as measure_fn
+from build123d_mcp.tools.export import export_file
+from build123d_mcp.tools.interference import interference as interference_fn
 
 mcp = FastMCP("build123d-mcp")
 _session = Session()
