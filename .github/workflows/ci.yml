@@ -15,7 +15,7 @@ jobs:
       - name: Install system dependencies for headless rendering
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y libgl1-mesa-glx libglu1-mesa xvfb libxrender1 libxi6
+          sudo apt-get install -y libgl1 libglu1-mesa xvfb libxrender1 libxi6
 
       - uses: astral-sh/setup-uv@v5
         with:
