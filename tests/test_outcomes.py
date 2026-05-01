@@ -133,6 +133,59 @@ def test_reset_clears_show_registry(session):
 
 
 # ---------------------------------------------------------------------------
+# Richer measurements
+# ---------------------------------------------------------------------------
+
+def test_volume_detects_missing_boolean(session):
+    """volume() exposes the difference between a solid and a hollowed part."""
+    execute_code(session, "show('full', Box(20, 20, 20))")
+    solid_vol = json.loads(measure(session, "volume", "full"))["volume"]
+    execute_code(session, "show('hollow', Box(20, 20, 20) - Cylinder(5, 22))")
+    hollow_vol = json.loads(measure(session, "volume", "hollow"))["volume"]
+    assert hollow_vol < solid_vol
+    assert abs(solid_vol - 8000) < 1
+
+
+def test_area_increases_after_adding_surface(session):
+    """Surface area grows when a protrusion is added."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    base_area = json.loads(measure(session, "area"))["area"]
+    execute_code(session, "result = Box(10, 10, 10) + Cylinder(2, 5).move(Location((0, 0, 7.5)))")
+    new_area = json.loads(measure(session, "area"))["area"]
+    assert new_area > base_area
+
+
+def test_min_wall_thickness_thinnest_wall_reported(session):
+    """A shape with one thin wall reports that wall's thickness."""
+    # Slab 20x20 wide but only 3mm thick
+    execute_code(session, "result = Box(20, 20, 3)")
+    data = json.loads(measure(session, "min_wall_thickness"))
+    assert abs(data["min_wall_thickness"] - 3) < 0.5
+
+
+def test_clearance_between_assembly_parts(session):
+    """Clearance query returns the gap between two registered bodies."""
+    execute_code(session,
+        "show('shaft', Cylinder(4, 30))\n"
+        "show('bore_housing', Box(30, 30, 30) - Cylinder(5, 32))"
+    )
+    data = json.loads(measure(session, "clearance", "shaft", "bore_housing"))
+    # shaft radius 4, bore radius 5 — clearance should be ~1mm
+    assert data["clearance"] >= 0
+    assert data["clearance"] < 5
+
+
+def test_clearance_zero_for_touching_shapes(session):
+    """Touching shapes report zero clearance."""
+    execute_code(session,
+        "show('a', Box(10, 10, 10))\n"
+        "show('b', Box(10, 10, 10).move(Location((10, 0, 0))))"
+    )
+    data = json.loads(measure(session, "clearance", "a", "b"))
+    assert data["clearance"] < 0.01
+
+
+# ---------------------------------------------------------------------------
 # Rendering quality and clip plane
 # ---------------------------------------------------------------------------
 
@@ -228,6 +281,23 @@ def test_mcp_reset_clears_state():
 
     text = asyncio.run(_mcp_session(run))
     assert "No shape" in text
+
+
+def test_mcp_volume_and_clearance():
+    """volume and clearance round-trip through the MCP wire."""
+    async def run(mcp):
+        await mcp.call_tool("execute", {"code": (
+            "from build123d import *\n"
+            "show('a', Box(10, 10, 10))\n"
+            "show('b', Box(10, 10, 10).move(Location((15, 0, 0))))"
+        )})
+        r_vol = await mcp.call_tool("measure", {"query": "volume", "object_name": "a"})
+        r_cl = await mcp.call_tool("measure", {"query": "clearance", "object_name": "a", "object_name2": "b"})
+        return r_vol.content[0].text, r_cl.content[0].text
+
+    vol_json, cl_json = asyncio.run(_mcp_session(run))
+    assert abs(json.loads(vol_json)["volume"] - 1000) < 1
+    assert abs(json.loads(cl_json)["clearance"] - 5) < 0.1
 
 
 def test_mcp_show_and_measure_named_object():
