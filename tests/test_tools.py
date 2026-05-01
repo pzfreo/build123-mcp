@@ -146,4 +146,74 @@ def test_reset_clears_shape(session):
 def test_reset_clears_namespace(session):
     execute_code(session, "x = 99")
     session.reset()
-    assert len(session.namespace) == 0
+    assert "x" not in session.namespace
+    assert "show" in session.namespace
+
+
+# --- multi-object / show() ---
+
+def test_show_registers_object(session):
+    execute_code(session, "box = Box(10, 10, 10)")
+    session.namespace["show"]("mybox", session.current_shape)
+    assert "mybox" in session.objects
+
+
+def test_show_callable_from_execute(session):
+    execute_code(session, "box = Box(10, 10, 10)\nshow('mybox', box)")
+    assert "mybox" in session.objects
+
+
+def test_reset_clears_objects(session):
+    execute_code(session, "show('b', Box(5, 5, 5))")
+    assert session.objects
+    session.reset()
+    assert not session.objects
+
+
+def test_show_available_after_reset(session):
+    session.reset()
+    assert "show" in session.namespace
+
+
+def test_render_view_multiple_objects(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    png = render_view(session, "iso")
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_named_subset(session):
+    execute_code(session, "show('a', Box(10, 10, 10))\nshow('b', Cylinder(5, 20))")
+    png = render_view(session, "iso", "a")
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_unknown_object_raises(session):
+    execute_code(session, "show('a', Box(10, 10, 10))")
+    with pytest.raises(ValueError, match="Unknown object"):
+        render_view(session, "iso", "missing")
+
+
+def test_measure_named_object(session):
+    execute_code(session, "show('wide', Box(30, 10, 10))")
+    data = json.loads(measure(session, "bounding_box", "wide"))
+    assert abs(data["xsize"] - 30) < 0.01
+
+
+def test_measure_unknown_object_raises(session):
+    execute_code(session, "show('a', Box(5, 5, 5))")
+    with pytest.raises(ValueError, match="Unknown object"):
+        measure(session, "bounding_box", "missing")
+
+
+def test_export_named_object(session, tmp_path):
+    execute_code(session, "show('part', Box(10, 10, 10))")
+    path = str(tmp_path / "out")
+    result = export_file(session, path, "step", "part")
+    assert os.path.exists(path + ".step")
+    assert "Exported" in result
+
+
+def test_export_unknown_object_raises(session, tmp_path):
+    execute_code(session, "show('a', Box(5, 5, 5))")
+    with pytest.raises(ValueError, match="Unknown object"):
+        export_file(session, str(tmp_path / "out"), "step", "missing")

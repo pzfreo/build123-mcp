@@ -2,10 +2,18 @@ import os
 from pathlib import PurePosixPath, PureWindowsPath
 
 
-def export_file(session, filename: str, format: str = "step") -> str:
-    shape = session.current_shape
-    if shape is None:
+def _resolve_shape(session, object_name: str):
+    if object_name:
+        if object_name not in session.objects:
+            raise ValueError(f"Unknown object '{object_name}'. Registered: {list(session.objects.keys())}")
+        return session.objects[object_name]
+    if session.current_shape is None:
         raise ValueError("No shape in session. Execute code to create geometry first.")
+    return session.current_shape
+
+
+def export_file(session, filename: str, format: str = "step", object_name: str = "") -> str:
+    shape = _resolve_shape(session, object_name)
 
     fmt = format.lower()
     if fmt not in ("step", "stl"):

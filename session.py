@@ -6,6 +6,16 @@ class Session:
     def __init__(self):
         self.namespace = {}
         self.current_shape = None
+        self.objects = {}
+        self._inject_builtins()
+
+    def _inject_builtins(self):
+        objects = self.objects
+
+        def show(name, shape):
+            objects[name] = shape
+
+        self.namespace["show"] = show
 
     def execute(self, code: str) -> str:
         buf = io.StringIO()
@@ -51,3 +61,5 @@ class Session:
     def reset(self):
         self.namespace.clear()
         self.current_shape = None
+        self.objects.clear()
+        self._inject_builtins()

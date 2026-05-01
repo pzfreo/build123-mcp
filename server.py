@@ -12,27 +12,27 @@ _session = Session()
 
 @mcp.tool()
 def execute(code: str) -> str:
-    """Execute build123d Python code in the persistent session."""
+    """Execute build123d Python code in the persistent session. Use show(name, shape) to register named objects."""
     return execute_code(_session, code)
 
 
 @mcp.tool()
-def render_view(direction: str = "iso") -> Image:
-    """Render the current model as PNG. Direction: top, front, side, iso."""
-    png_bytes = render_view_fn(_session, direction)
+def render_view(direction: str = "iso", objects: str = "") -> Image:
+    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names to show (default: all registered, or current shape)."""
+    png_bytes = render_view_fn(_session, direction, objects)
     return Image(data=png_bytes, format="png")
 
 
 @mcp.tool()
-def measure(query: str = "bounding_box") -> str:
-    """Query geometry of the current model. Query: bounding_box."""
-    return measure_fn(_session, query)
+def measure(query: str = "bounding_box", object_name: str = "") -> str:
+    """Query geometry. query: bounding_box. object_name: named object from show() (default: current shape)."""
+    return measure_fn(_session, query, object_name)
 
 
 @mcp.tool()
-def export(filename: str, format: str = "step") -> str:
-    """Export the current model. Format: step, stl."""
-    return export_file(_session, filename, format)
+def export(filename: str, format: str = "step", object_name: str = "") -> str:
+    """Export model. format: step, stl. object_name: named object from show() (default: current shape)."""
+    return export_file(_session, filename, format, object_name)
 
 
 @mcp.tool()
