@@ -22,6 +22,7 @@ jobs:
 
   publish-testpypi:
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
