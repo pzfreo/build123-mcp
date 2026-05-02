@@ -155,7 +155,7 @@ class WorkerSession:
     def _call(self, op: str, args: dict, timeout: int) -> Any:
         if not self._proc.is_alive():
             self._start_worker()
-            return "Error: Worker crashed; session restarted. Re-run your setup code."
+            raise RuntimeError("Worker crashed; session restarted. Re-run your setup code.")
 
         self._conn.send({"op": op, "args": args})
 
@@ -173,7 +173,7 @@ class WorkerSession:
             response = self._conn.recv()
         except EOFError:
             self._start_worker()
-            return "Error: Worker process crashed unexpectedly; session restarted."
+            raise RuntimeError("Worker process crashed unexpectedly; session restarted.")
 
         if response["ok"]:
             return response["result"]
@@ -182,7 +182,10 @@ class WorkerSession:
     # --- Session-compatible interface ---
 
     def execute(self, code: str) -> str:
-        return self._call("execute", {"code": code}, self._exec_timeout)
+        try:
+            return self._call("execute", {"code": code}, self._exec_timeout)
+        except RuntimeError as e:
+            return f"Error: {e}"
 
     def render_view(
         self,
