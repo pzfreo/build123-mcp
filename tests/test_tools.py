@@ -408,6 +408,25 @@ def test_reset_clears_snapshots(session):
     assert not session.snapshots
 
 
+def test_dispatch_save_snapshot_no_shape_omits_current_shape():
+    from build123d_mcp.session import Session
+    from build123d_mcp.worker import _dispatch
+    s = Session()
+    msg = _dispatch(s, "save_snapshot", {"name": "empty"}, None)
+    assert "current_shape" not in msg
+    assert "none" in msg.lower()
+
+
+def test_dispatch_restore_snapshot_no_shape_omits_current_shape():
+    from build123d_mcp.session import Session
+    from build123d_mcp.worker import _dispatch
+    s = Session()
+    _dispatch(s, "save_snapshot", {"name": "empty"}, None)
+    msg = _dispatch(s, "restore_snapshot", {"name": "empty"}, None)
+    assert "current_shape" not in msg
+    assert "none" in msg.lower()
+
+
 def test_namespace_preserved_after_restore(session):
     execute_code(session, "x = 42")
     session.save_snapshot("s1")
