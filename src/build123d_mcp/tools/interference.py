@@ -29,8 +29,7 @@ def interference(session, object_a: str, object_b: str) -> str:
     shape_a = session.objects[object_a]
     shape_b = session.objects[object_b]
 
-    from build123d_mcp.security import run_occ_in_fork
-    interferes, volume, bounds = run_occ_in_fork(_compute_interference, shape_a, shape_b, timeout_sec=30)
+    interferes, volume, bounds = _compute_interference(shape_a, shape_b)
 
     if not interferes:
         return json.dumps({"interferes": False, "volume": 0.0}, indent=2)

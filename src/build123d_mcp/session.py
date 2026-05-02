@@ -1,4 +1,5 @@
 import io
+import signal
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Any
 
@@ -6,7 +7,6 @@ from build123d_mcp.security import (
     EXEC_TIMEOUT_SECONDS,
     ExecutionTimeout,
     check_ast,
-    exec_in_subprocess,
     make_restricted_builtins,
 )
 
@@ -49,28 +49,44 @@ class Session:
         except SyntaxError as e:
             return f"Error: SyntaxError: {e}"
 
-        user_ns = {k: v for k, v in self.namespace.items() if k not in ("__builtins__", "show")}
-        keys_before = set(user_ns.keys())
+        keys_before = {k for k in self.namespace if k not in ("__builtins__", "show")}
+
+        buf = io.StringIO()
+        exc: Exception | None = None
+
+        # Layer 3: SIGALRM timeout (Unix main-thread only; silently skipped otherwise)
+        _alarm_set = False
+        _old_handler: Any = None
+        try:
+            def _timeout_handler(signum: int, frame: Any) -> None:
+                raise ExecutionTimeout(
+                    f"Code exceeded the {self.exec_timeout}s execution time limit."
+                )
+            _old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(self.exec_timeout)
+            _alarm_set = True
+        except (OSError, ValueError, AttributeError):
+            pass  # Windows (no SIGALRM) or non-main thread; no timeout protection
 
         try:
-            # Layer 3: runs in a forked child process; hard-killed on timeout
-            stdout, exc, new_namespace, show_calls = exec_in_subprocess(
-                code, user_ns, self.exec_timeout
-            )
+            with redirect_stdout(buf), redirect_stderr(buf):
+                exec(compile(code, "<mcp>", "exec"), self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
             return f"Error: ExecutionTimeout: {e}"
+        except Exception as e:
+            exc = e
+        finally:
+            if _alarm_set:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, _old_handler)
+
+        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
+        self._update_current_shape(new_keys)
 
         if exc is not None:
             return f"Error: {type(exc).__name__}: {exc}"
 
-        self.namespace.update(new_namespace)
-        for name, shape in show_calls:
-            self.objects[name] = shape
-
-        new_keys = set(new_namespace.keys()) - keys_before
-        self._update_current_shape(new_keys)
-
-        return stdout if stdout else "OK"
+        return buf.getvalue() or "OK"
 
     def _update_current_shape(self, new_keys: set[str]) -> None:
         try:

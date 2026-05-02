@@ -27,8 +27,7 @@ def _write_one(shape, abs_path: str, fmt: str) -> None:
         from build123d import export_step
         export_step(shape, abs_path)
     else:
-        from build123d_mcp.security import run_occ_in_fork
-        run_occ_in_fork(_stl_write, shape, abs_path, timeout_sec=60)
+        _stl_write(shape, abs_path)
 
 
 def export_file(session, filename: str, format: str = "step", object_name: str = "") -> str:
