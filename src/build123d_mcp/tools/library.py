@@ -30,10 +30,12 @@ class _LibraryIndex:
 
     def _needs_rescan(self) -> bool:
         for dirpath, _, filenames in os.walk(self.library_path):
+            # Directory mtime changes on add/remove; check it before file stats.
+            if os.path.getmtime(dirpath) > self._last_scan:
+                return True
             for filename in filenames:
                 if filename.endswith(".py"):
-                    mtime = os.path.getmtime(os.path.join(dirpath, filename))
-                    if mtime > self._last_scan:
+                    if os.path.getmtime(os.path.join(dirpath, filename)) > self._last_scan:
                         return True
         return False
 
