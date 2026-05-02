@@ -14,22 +14,26 @@ def _resolve_shape(session, object_name: str):
     return session.current_shape
 
 
+def _stl_write(shape, abs_path: str) -> None:
+    from build123d import Mesher
+    mesher = Mesher()
+    mesher.add_shape(shape)
+    mesher.write(abs_path)
+
+
 def _write_one(shape, abs_path: str, fmt: str) -> None:
     if fmt == "step":
         from build123d import export_step
         export_step(shape, abs_path)
     else:
-        from build123d import Mesher
-        mesher = Mesher()
-        mesher.add_shape(shape)
-        mesher.write(abs_path)
+        _stl_write(shape, abs_path)
 
 
 def export_file(session, filename: str, format: str = "step", object_name: str = "") -> str:
     shape = _resolve_shape(session, object_name)
 
-    # Reject path traversal attempts
-    if ".." in PurePosixPath(filename).parts or ".." in PureWindowsPath(filename).parts:
+    # Reject absolute paths and path traversal attempts
+    if os.path.isabs(filename) or ".." in PurePosixPath(filename).parts or ".." in PureWindowsPath(filename).parts:
         raise ValueError("Path traversal not allowed.")
 
     formats = [f.strip().lower() for f in format.split(",") if f.strip()]

@@ -34,4 +34,8 @@ build123d-mcp = "build123d_mcp.server:main"
 packages = ["src/build123d_mcp"]
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["pytest", "mypy"]
+
+[tool.mypy]
+files = ["src"]
+ignore_missing_imports = true

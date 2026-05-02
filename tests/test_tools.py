@@ -242,33 +242,33 @@ def test_measure_clearance_unknown_object2_raises(session):
 
 # --- export ---
 
-def test_export_step(session, tmp_path):
+def test_export_step(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(10, 10, 10)")
-    path = str(tmp_path / "out")
-    result = export_file(session, path, "step")
-    assert os.path.exists(path + ".step")
-    assert os.path.getsize(path + ".step") > 0
+    result = export_file(session, "out", "step")
+    assert os.path.exists("out.step")
+    assert os.path.getsize("out.step") > 0
     assert "Exported" in result
 
 
-def test_export_stl(session, tmp_path):
+def test_export_stl(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(10, 10, 10)")
-    path = str(tmp_path / "out")
-    result = export_file(session, path, "stl")
-    assert os.path.exists(path + ".stl")
-    assert os.path.getsize(path + ".stl") > 0
+    result = export_file(session, "out", "stl")
+    assert os.path.exists("out.stl")
+    assert os.path.getsize("out.stl") > 0
 
 
-def test_export_multi_format(session, tmp_path):
+def test_export_multi_format(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(10, 10, 10)")
-    path = str(tmp_path / "out")
-    result = export_file(session, path, "step,stl")
-    assert os.path.exists(path + ".step")
-    assert os.path.exists(path + ".stl")
-    assert os.path.getsize(path + ".step") > 0
-    assert os.path.getsize(path + ".stl") > 0
-    assert path + ".step" in result
-    assert path + ".stl" in result
+    result = export_file(session, "out", "step,stl")
+    assert os.path.exists("out.step")
+    assert os.path.exists("out.stl")
+    assert os.path.getsize("out.step") > 0
+    assert os.path.getsize("out.stl") > 0
+    assert ".step" in result
+    assert ".stl" in result
 
 
 def test_export_invalid_format(session):
@@ -281,6 +281,12 @@ def test_export_path_traversal_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):
         export_file(session, "../../etc/passwd", "step")
+
+
+def test_export_absolute_path_rejected(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Path traversal"):
+        export_file(session, "/tmp/evil", "step")
 
 
 # --- reset ---
@@ -354,18 +360,18 @@ def test_measure_unknown_object_raises(session):
         measure(session, "bounding_box", "missing")
 
 
-def test_export_named_object(session, tmp_path):
+def test_export_named_object(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "show(Box(10, 10, 10), 'part')")
-    path = str(tmp_path / "out")
-    result = export_file(session, path, "step", "part")
-    assert os.path.exists(path + ".step")
+    result = export_file(session, "out", "step", "part")
+    assert os.path.exists("out.step")
     assert "Exported" in result
 
 
-def test_export_unknown_object_raises(session, tmp_path):
+def test_export_unknown_object_raises(session):
     execute_code(session, "show(Box(5, 5, 5), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
-        export_file(session, str(tmp_path / "out"), "step", "missing")
+        export_file(session, "out", "step", "missing")
 
 
 # --- snapshots ---
@@ -533,26 +539,32 @@ def test_render_view_clip_at_negative_returns_png(session):
 
 # --- render_view save_to (new) ---
 
-def test_render_view_save_to_writes_png(session, tmp_path):
+def test_render_view_save_to_writes_png(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(10, 10, 10)")
-    dest = str(tmp_path / "out")
-    png = render_view(session, "iso", save_to=dest)
+    png = render_view(session, "iso", save_to="out")
     assert png[:8] == PNG_MAGIC
-    assert os.path.exists(dest + ".png")
-    assert os.path.getsize(dest + ".png") > 0
+    assert os.path.exists("out.png")
+    assert os.path.getsize("out.png") > 0
 
 
-def test_render_view_save_to_with_extension(session, tmp_path):
+def test_render_view_save_to_with_extension(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(10, 10, 10)")
-    dest = str(tmp_path / "out.png")
-    render_view(session, "iso", save_to=dest)
-    assert os.path.exists(dest)
+    render_view(session, "iso", save_to="out.png")
+    assert os.path.exists("out.png")
 
 
 def test_render_view_save_to_path_traversal_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):
         render_view(session, "iso", save_to="../../tmp/evil")
+
+
+def test_render_view_save_to_absolute_path_rejected(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Path traversal"):
+        render_view(session, "iso", save_to="/tmp/evil")
 
 
 # --- show() feedback (new) ---

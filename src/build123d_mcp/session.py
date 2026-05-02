@@ -1,11 +1,12 @@
 import io
+import signal
 from contextlib import redirect_stdout, redirect_stderr
+from typing import Any
 
 from build123d_mcp.security import (
     EXEC_TIMEOUT_SECONDS,
     ExecutionTimeout,
     check_ast,
-    exec_with_timeout,
     make_restricted_builtins,
 )
 
@@ -13,17 +14,17 @@ from build123d_mcp.security import (
 class Session:
     def __init__(self, exec_timeout: int = EXEC_TIMEOUT_SECONDS):
         self.exec_timeout = exec_timeout
-        self.namespace = {}
-        self.current_shape = None
-        self.objects = {}
-        self.snapshots = {}
+        self.namespace: dict[str, Any] = {}
+        self.current_shape: Any = None
+        self.objects: dict[str, Any] = {}
+        self.snapshots: dict[str, Any] = {}
         self._inject_builtins()
 
-    def _inject_builtins(self):
+    def _inject_builtins(self) -> None:
         self.namespace["__builtins__"] = make_restricted_builtins()
         objects = self.objects
 
-        def show(shape, name=None):
+        def show(shape: Any, name: str | None = None) -> None:
             if name is None:
                 name = "shape"
             objects[name] = shape
@@ -48,22 +49,48 @@ class Session:
         except SyntaxError as e:
             return f"Error: SyntaxError: {e}"
 
+        keys_before = {k for k in self.namespace if k not in ("__builtins__", "show")}
+
         buf = io.StringIO()
-        keys_before = set(self.namespace.keys())
+        exc: Exception | None = None
+
+        # Layer 3: SIGALRM timeout (Unix main-thread only; silently skipped otherwise).
+        # Fire 2s before the parent's conn.poll() deadline so the worker always
+        # returns a response before the parent kills it.
+        _alarm_set = False
+        _old_handler: Any = None
+        try:
+            def _timeout_handler(signum: int, frame: Any) -> None:
+                raise ExecutionTimeout(
+                    f"Code exceeded the {self.exec_timeout}s execution time limit."
+                )
+            _old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(max(1, self.exec_timeout - 2))
+            _alarm_set = True
+        except (OSError, ValueError, AttributeError):
+            pass  # Windows (no SIGALRM) or non-main thread; no timeout protection
+
         try:
             with redirect_stdout(buf), redirect_stderr(buf):
-                # Layer 3: timeout wraps the actual exec
-                exec_with_timeout(compiled, self.namespace, self.exec_timeout)
-            new_keys = set(self.namespace.keys()) - keys_before
-            self._update_current_shape(new_keys)
+                exec(compiled, self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
             return f"Error: ExecutionTimeout: {e}"
         except Exception as e:
-            return f"Error: {type(e).__name__}: {e}"
-        output = buf.getvalue()
-        return output if output else "OK"
+            exc = e
+        finally:
+            if _alarm_set:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, _old_handler)
 
-    def _update_current_shape(self, new_keys):
+        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
+        self._update_current_shape(new_keys)
+
+        if exc is not None:
+            return f"Error: {type(exc).__name__}: {exc}"
+
+        return buf.getvalue() or "OK"
+
+    def _update_current_shape(self, new_keys: set[str]) -> None:
         try:
             from build123d import Shape, BuildPart
         except ImportError:
@@ -105,7 +132,7 @@ class Session:
         self.objects.clear()
         self.objects.update(snap["objects"])
 
-    def reset(self):
+    def reset(self) -> None:
         self.namespace.clear()
         self.current_shape = None
         self.objects.clear()

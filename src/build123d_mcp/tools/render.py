@@ -1,5 +1,5 @@
 import os
-import tempfile
+import sys
 
 _display_initialized = False
 
@@ -17,7 +17,7 @@ _QUALITY = {
 def _init_display():
     global _display_initialized
     if not _display_initialized:
-        if not os.environ.get("DISPLAY"):
+        if sys.platform == "linux" and not os.environ.get("DISPLAY"):
             import warnings
             import pyvista as pv
             with warnings.catch_warnings():
@@ -50,13 +50,69 @@ def _resolve_shapes(session, objects: str):
     raise ValueError("No shape in session. Execute code to create geometry first.")
 
 
+def _do_render(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation) -> bytes:
+    import tempfile
+    import pyvista as pv
+    from build123d import Mesher
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        png_path = os.path.join(tmpdir, "render.png")
+        plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
+
+        for i, (name, shape, obj_color) in enumerate(shapes):
+            stl_path = os.path.join(tmpdir, f"shape_{i}.stl")
+            mesher = Mesher()
+            mesher.add_shape(shape, **tess)  # type: ignore[arg-type]
+            mesher.write(stl_path)
+            mesh = pv.read(stl_path)
+
+            if clip_plane:
+                if clip_at is not None:
+                    origin = {"x": [clip_at, 0, 0], "y": [0, clip_at, 0], "z": [0, 0, clip_at]}[clip_plane]
+                else:
+                    origin = list(mesh.center)
+                mesh = mesh.clip(normal=clip_plane, origin=origin, invert=False)
+
+            plotter.add_mesh(
+                mesh,  # type: ignore[arg-type]
+                color=obj_color if obj_color else _PALETTE[i % len(_PALETTE)],
+                smooth_shading=True,
+                ambient=0.3,
+                diffuse=0.7,
+                specular=0.2,
+            )
+
+        plotter.background_color = "white"  # type: ignore[assignment]
+
+        if direction == "top":
+            plotter.view_xy()  # type: ignore[call-arg]
+        elif direction == "front":
+            plotter.view_xz()  # type: ignore[call-arg]
+        elif direction == "side":
+            plotter.view_yz()  # type: ignore[call-arg]
+        else:
+            plotter.view_isometric()  # type: ignore[call-arg]
+
+        if azimuth != 0.0 or elevation != 0.0:
+            plotter.camera.Azimuth(azimuth)
+            plotter.camera.Elevation(elevation)
+            plotter.camera.OrthogonalizeViewUp()
+            plotter.reset_camera_clipping_range()
+
+        plotter.screenshot(png_path)
+        plotter.close()
+
+        with open(png_path, "rb") as f:
+            return f.read()
+
+
 def render_view(
     session,
     direction: str = "iso",
     objects: str = "",
     quality: str = "standard",
     clip_plane: str = "",
-    clip_at: float = None,
+    clip_at: float | None = None,
     azimuth: float = 0.0,
     elevation: float = 0.0,
     save_to: str = "",
@@ -77,62 +133,11 @@ def render_view(
     tess = _QUALITY[quality]
 
     _init_display()
-    import pyvista as pv
-    from build123d import Mesher
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        png_path = os.path.join(tmpdir, "render.png")
-        plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
-
-        for i, (name, shape, obj_color) in enumerate(shapes):
-            stl_path = os.path.join(tmpdir, f"shape_{i}.stl")
-            mesher = Mesher()
-            mesher.add_shape(shape, **tess)
-            mesher.write(stl_path)
-            mesh = pv.read(stl_path)
-
-            if clip_plane:
-                if clip_at is not None:
-                    origin = {"x": [clip_at, 0, 0], "y": [0, clip_at, 0], "z": [0, 0, clip_at]}[clip_plane]
-                else:
-                    origin = list(mesh.center)
-                mesh = mesh.clip(normal=clip_plane, origin=origin, invert=False)
-
-            plotter.add_mesh(
-                mesh,
-                color=obj_color if obj_color else _PALETTE[i % len(_PALETTE)],
-                smooth_shading=True,
-                ambient=0.3,
-                diffuse=0.7,
-                specular=0.2,
-            )
-
-        plotter.background_color = "white"
-
-        if direction == "top":
-            plotter.view_xy()
-        elif direction == "front":
-            plotter.view_xz()
-        elif direction == "side":
-            plotter.view_yz()
-        else:
-            plotter.view_isometric()
-
-        if azimuth != 0.0 or elevation != 0.0:
-            plotter.camera.Azimuth(azimuth)
-            plotter.camera.Elevation(elevation)
-            plotter.camera.OrthogonalizeViewUp()
-            plotter.reset_camera_clipping_range()
-
-        plotter.screenshot(png_path)
-        plotter.close()
-
-        with open(png_path, "rb") as f:
-            png_bytes = f.read()
+    png_bytes = _do_render(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation)
 
     if save_to:
         from pathlib import PurePosixPath, PureWindowsPath
-        if ".." in PurePosixPath(save_to).parts or ".." in PureWindowsPath(save_to).parts:
+        if os.path.isabs(save_to) or ".." in PurePosixPath(save_to).parts or ".." in PureWindowsPath(save_to).parts:
             raise ValueError("Path traversal not allowed.")
         dest = save_to if save_to.lower().endswith(".png") else save_to + ".png"
         import os as _os

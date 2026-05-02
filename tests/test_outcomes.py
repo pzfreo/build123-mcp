@@ -46,27 +46,27 @@ def test_boolean_subtraction_removes_material(session):
     assert session.current_shape.volume < full_volume
 
 
-def test_create_measure_export_round_trip(session, tmp_path):
+def test_create_measure_export_round_trip(session, tmp_path, monkeypatch):
     """Create a known shape, verify its dimensions, then export it."""
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(30, 20, 10)")
     data = json.loads(measure(session, "bounding_box"))
     assert abs(data["xsize"] - 30) < 0.01
     assert abs(data["ysize"] - 20) < 0.01
     assert abs(data["zsize"] - 10) < 0.01
 
-    path = str(tmp_path / "out")
-    export_file(session, path, "step")
+    export_file(session, "out", "step")
     # A real STEP file for a simple box is several kilobytes
-    assert os.path.getsize(path + ".step") > 1000
+    assert os.path.getsize("out.step") > 1000
 
 
-def test_multi_format_export_produces_both_files(session, tmp_path):
+def test_multi_format_export_produces_both_files(session, tmp_path, monkeypatch):
     """Exporting step,stl in one call writes both files with real content."""
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(20, 20, 20)")
-    path = str(tmp_path / "part")
-    result = export_file(session, path, "step,stl")
-    step_size = os.path.getsize(path + ".step")
-    stl_size = os.path.getsize(path + ".stl")
+    result = export_file(session, "part", "step,stl")
+    step_size = os.path.getsize("part.step")
+    stl_size = os.path.getsize("part.stl")
     # STEP files are text-based and larger; STL binary is compact but non-zero
     assert step_size > 1000
     assert stl_size > 0
@@ -75,14 +75,14 @@ def test_multi_format_export_produces_both_files(session, tmp_path):
     assert ".stl" in result
 
 
-def test_multi_format_export_named_object(session, tmp_path):
+def test_multi_format_export_named_object(session, tmp_path, monkeypatch):
     """Multi-format export targets the named object, not current_shape."""
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(5, 5, 5)\nshow(Box(40, 40, 40), 'big')")
-    path = str(tmp_path / "big")
-    export_file(session, path, "step,stl", "big")
+    export_file(session, "big", "step,stl", "big")
     # The big box STEP file is distinctly larger than a 5mm box would produce
-    assert os.path.getsize(path + ".step") > 1000
-    assert os.path.getsize(path + ".stl") > 0
+    assert os.path.getsize("big.step") > 1000
+    assert os.path.getsize("big.stl") > 0
 
 
 def test_reset_discards_previous_geometry(session):
@@ -225,13 +225,13 @@ def test_assembly_render_differs_from_single_part_render(session):
     assert png_all != png_one
 
 
-def test_export_named_object_independent_of_current_shape(session, tmp_path):
+def test_export_named_object_independent_of_current_shape(session, tmp_path, monkeypatch):
     """Exporting a named object writes that shape, not current_shape."""
+    monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(5, 5, 5)\nshow(Box(50, 50, 50), 'big')")
-    path = str(tmp_path / "big")
-    export_file(session, path, "step", "big")
+    export_file(session, "big", "step", "big")
     # The big box STEP file should be larger than a tiny box would produce
-    assert os.path.getsize(path + ".step") > 1000
+    assert os.path.getsize("big.step") > 1000
 
 
 def test_reset_clears_show_registry(session):
@@ -323,14 +323,14 @@ def test_clip_plane_produces_different_image_than_unclipped(session):
 # MCP protocol round-trip: test through the actual stdio transport
 # ---------------------------------------------------------------------------
 
-async def _mcp_session(coro):
+async def _mcp_session(coro, cwd=None):
     from mcp.client.session import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
     params = StdioServerParameters(
         command="uv",
         args=["run", "build123d-mcp"],
-        cwd=SERVER_DIR,
+        cwd=cwd or SERVER_DIR,
     )
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as mcp:
@@ -423,14 +423,14 @@ def test_mcp_snapshot_save_and_restore():
     assert abs(data["xsize"] - 10) < 0.01
 
 
-def test_mcp_multi_format_export():
+def test_mcp_multi_format_export(tmp_path):
     """export with format='step,stl' reports both paths over the MCP wire."""
     async def run(mcp):
         await mcp.call_tool("execute", {"code": "from build123d import *\nresult = Box(10, 10, 10)"})
-        result = await mcp.call_tool("export", {"filename": "/tmp/mcp_test_out", "format": "step,stl"})
+        result = await mcp.call_tool("export", {"filename": "mcp_test_out", "format": "step,stl"})
         return result.content[0].text
 
-    text = asyncio.run(_mcp_session(run))
+    text = asyncio.run(_mcp_session(run, cwd=str(tmp_path)))
     assert ".step" in text
     assert ".stl" in text
 

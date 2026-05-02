@@ -1,11 +1,13 @@
 """
 Lightweight defence-in-depth for exec'd user code.
 
-Three layers:
-  1. AST inspection  — rejects dangerous imports and calls before exec runs.
+Two layers applied before exec() is called:
+  1. AST inspection  — rejects dangerous imports and calls.
   2. Restricted builtins — namespace __builtins__ has open/eval/exec removed
      and __import__ filtered to the allowlist.
-  3. Execution timeout — a background thread enforces a wall-clock limit.
+
+Timeout is enforced by the caller via SIGALRM (Session) or by killing the
+worker process (WorkerSession).
 
 This is not a complete sandbox. Determined Python sandbox escapes
 (subclass traversal, ctypes, etc.) are not blocked. The goal is to raise
@@ -14,7 +16,7 @@ filesystem reads, and network calls.
 """
 
 import ast
-import threading
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -90,7 +92,7 @@ def _check_module(dotted_name: str) -> None:
 # Layer 2: Restricted builtins
 # ---------------------------------------------------------------------------
 
-def make_restricted_builtins() -> dict:
+def make_restricted_builtins() -> dict[str, Any]:
     """Return a __builtins__ dict with dangerous functions removed.
 
     open / eval / exec / compile are removed outright.
@@ -106,7 +108,7 @@ def make_restricted_builtins() -> dict:
 
     _original_import = safe["__import__"]
 
-    def _safe_import(name, *args, **kwargs):
+    def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
         root = name.split(".")[0]
         if root not in IMPORT_ALLOWLIST:
             raise ImportError(
@@ -120,35 +122,8 @@ def make_restricted_builtins() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Layer 3: Execution timeout
+# Timeout exception (raised by SIGALRM in Session or propagated by WorkerSession)
 # ---------------------------------------------------------------------------
 
 class ExecutionTimeout(Exception):
     pass
-
-
-def exec_with_timeout(compiled, namespace: dict, timeout_sec: int) -> None:
-    """Run exec(compiled, namespace) and raise ExecutionTimeout if it exceeds timeout_sec.
-
-    Uses a daemon thread so this works regardless of which thread the caller
-    is in (e.g. asyncio event loop). The background thread may outlive the
-    timeout — it is daemon so it will not prevent process exit, but it may
-    still modify namespace after the timeout. Callers should treat the
-    namespace as potentially dirty after a timeout.
-    """
-    exc_holder: list = [None]
-
-    def _run() -> None:
-        try:
-            exec(compiled, namespace)  # noqa: S102
-        except Exception as exc:
-            exc_holder[0] = exc
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout_sec)
-
-    if t.is_alive():
-        raise ExecutionTimeout(f"Code exceeded the {timeout_sec}s execution time limit.")
-    if exc_holder[0] is not None:
-        raise exc_holder[0]

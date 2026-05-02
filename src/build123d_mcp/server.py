@@ -1,74 +1,67 @@
 from mcp.server.fastmcp import FastMCP, Image
 
-from build123d_mcp.session import Session
-from build123d_mcp.tools.execute import execute_code
-from build123d_mcp.tools.render import render_view as render_view_fn
-from build123d_mcp.tools.measure import measure as measure_fn
-from build123d_mcp.tools.export import export_file
-from build123d_mcp.tools.interference import interference as interference_fn
-from build123d_mcp.tools.list_objects import list_objects as list_objects_fn
-from build123d_mcp.tools.library import (
-    _LibraryIndex,
-    search_library as search_library_fn,
-    load_part as load_part_fn,
-)
+from build123d_mcp.worker import WorkerSession
 
 mcp = FastMCP("build123d-mcp")
-_session = Session()
-_library_index: _LibraryIndex | None = None
+_session: WorkerSession
+_has_library = False
 
 
 @mcp.tool()
 def execute(code: str) -> str:
     """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects (name defaults to 'shape'); show() immediately prints volume and face count confirming the shape is non-empty. After any boolean operation (-, +, &) call measure(topology) or measure(volume) to confirm it succeeded before calling render_view."""
-    return execute_code(_session, code)
+    return _session.execute(code)
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
     """Render model as PNG. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path to save the PNG (extension auto-appended if omitted)."""
-    png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane, clip_at, azimuth, elevation, save_to)
+    png_bytes = _session.render_view(
+        direction=direction, objects=objects, quality=quality,
+        clip_plane=clip_plane, clip_at=clip_at, azimuth=azimuth,
+        elevation=elevation, save_to=save_to,
+    )
     return Image(data=png_bytes, format="png")
 
 
 @mcp.tool()
 def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
     """Query geometry of a shape. Prefer measure over render_view when verifying geometry — numbers are unambiguous. query: bounding_box, volume, area, min_wall_thickness, clearance, topology. topology (face/edge/vertex counts) is the fastest way to confirm a boolean operation succeeded: a cut that failed leaves the counts unchanged. object_name/object_name2: named objects from show() (clearance requires both)."""
-    return measure_fn(_session, query, object_name, object_name2)
+    return _session.measure(query, object_name, object_name2)
 
 
 @mcp.tool()
 def export(filename: str, format: str = "step", object_name: str = "") -> str:
     """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show() (default: current shape)."""
-    return export_file(_session, filename, format, object_name)
+    return _session.export_file(filename, format, object_name)
 
 
 @mcp.tool()
 def interference(object_a: str, object_b: str) -> str:
     """Check whether two named objects (from show()) intersect. Returns interferes (bool), volume (mm³ of overlap), and bounds of the interference region."""
-    return interference_fn(_session, object_a, object_b)
+    return _session.interference(object_a, object_b)
 
 
 @mcp.tool()
 def search_library(query: str = "") -> str:
     """Search the part library. query: keywords matched against name, description, tags, category (empty returns all). Returns name, category, description, tags, and full parameter specs including types, defaults, and descriptions."""
-    if _library_index is None:
+    if not _has_library:
         return "No part library configured. Start the server with --library PATH or set BUILD123D_PART_LIBRARY."
-    return search_library_fn(_library_index, query)
+    return _session.search_library(query)
 
 
 @mcp.tool()
 def load_part(name: str, params: str = "") -> str:
     """Load a named part from the library into the session. name: part name from search_library. params: optional JSON object of parameter overrides e.g. '{\"od\": 8.0, \"length\": 20.0}' — unspecified params use their defaults. The part is registered as a named object and becomes current_shape."""
-    if _library_index is None:
+    if not _has_library:
         return "No part library configured. Start the server with --library PATH or set BUILD123D_PART_LIBRARY."
-    return load_part_fn(_session, _library_index, name, params)
+    return _session.load_part(name, params)
 
 
 @mcp.tool()
 def list_objects() -> str:
     """List all named shapes registered via show(), each with volume (mm³), face, edge, and vertex counts. Call this to audit session state without guessing what show() has been called on."""
-    return list_objects_fn(_session)
+    return _session.list_objects()
 
 
 @mcp.tool()
@@ -76,9 +69,7 @@ def save_snapshot(name: str) -> str:
     """Save a named checkpoint of the current geometric state (current_shape and the show() object registry).
     The Python variable namespace is NOT saved — only geometry. Call this before risky experiments so you can
     restore known-good geometry without re-running all prior execute() calls."""
-    _session.save_snapshot(name)
-    saved = ["current_shape"] + list(_session.snapshots[name]["objects"].keys())
-    return f"Snapshot '{name}' saved. Geometry captured: {', '.join(saved) if saved else 'none'}."
+    return _session.save_snapshot(name)
 
 
 @mcp.tool()
@@ -87,19 +78,13 @@ def restore_snapshot(name: str) -> str:
     The Python variable namespace is NOT restored — execute() calls made after the snapshot are still in scope,
     but current_shape and all show() objects revert to what they were at snapshot time.
     Raises an error if the snapshot name does not exist."""
-    try:
-        _session.restore_snapshot(name)
-    except KeyError as e:
-        return f"Error: {e}"
-    restored = ["current_shape"] + list(_session.objects.keys())
-    return f"Snapshot '{name}' restored. Active geometry: {', '.join(restored) if restored else 'none'}."
+    return _session.restore_snapshot(name)
 
 
 @mcp.tool()
 def reset() -> str:
     """Clear the current session back to empty state, including all snapshots."""
-    _session.reset()
-    return "Session reset."
+    return _session.reset()
 
 
 @mcp.tool()
@@ -196,11 +181,12 @@ Part library file format (Python, any .py file under --library path):
     )
     args = parser.parse_args()
 
-    if args.library:
-        if not os.path.isdir(args.library):
-            parser.error(f"Library path is not a directory: {args.library}")
-        global _library_index
-        _library_index = _LibraryIndex(args.library)
+    if args.library and not os.path.isdir(args.library):
+        parser.error(f"Library path is not a directory: {args.library}")
+
+    global _session, _has_library
+    _has_library = bool(args.library)
+    _session = WorkerSession(library_path=args.library)
 
     mcp.run()
 
