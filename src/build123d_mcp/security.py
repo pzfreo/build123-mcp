@@ -9,10 +9,10 @@ Two layers applied before exec() is called:
 Timeout is enforced by the caller via SIGALRM (Session) or by killing the
 worker process (WorkerSession).
 
-This is not a complete sandbox. Determined Python sandbox escapes
-(subclass traversal, ctypes, etc.) are not blocked. The goal is to raise
-the bar against realistic prompt-injection payloads: shell commands,
-filesystem reads, and network calls.
+This is not a complete sandbox. The AST check blocks the most common
+subclass-traversal escape paths (dunder attribute access, getattr/vars/dir)
+but ctypes, C extensions, and build123d internals are not further restricted.
+The goal is to raise the bar against realistic prompt-injection payloads.
 """
 
 import ast
@@ -40,11 +40,15 @@ IMPORT_ALLOWLIST = frozenset({
 # Builtins that are dangerous even without an import.
 _BLOCKED_BUILTINS = frozenset({
     "eval", "exec", "compile", "open", "breakpoint", "input",
+    # Introspection builtins that enable subclass-traversal sandbox escapes.
+    "getattr", "vars", "dir", "hasattr",
 })
 
 # Bare-name calls that are caught at the AST level (before exec runs).
 _BLOCKED_CALL_NAMES = frozenset({
     "__import__", "eval", "exec", "compile", "open", "breakpoint", "input",
+    # Introspection calls that can bypass dunder-attribute blocking via strings.
+    "getattr", "vars", "dir", "hasattr",
 })
 
 
@@ -74,6 +78,12 @@ def check_ast(code: str) -> None:
             if isinstance(node.func, ast.Name) and node.func.id in _BLOCKED_CALL_NAMES:
                 raise ValueError(
                     f"Call to '{node.func.id}' is not allowed."
+                )
+        elif isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") and node.attr.endswith("__"):
+                raise ValueError(
+                    f"Access to dunder attribute '{node.attr}' is not allowed. "
+                    f"Use operators and language syntax instead of explicit dunder access."
                 )
 
 
