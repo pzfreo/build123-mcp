@@ -20,20 +20,20 @@ _library_index: _LibraryIndex | None = None
 
 @mcp.tool()
 def execute(code: str) -> str:
-    """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects; name is optional and defaults to 'shape'."""
+    """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects (name defaults to 'shape'); show() immediately prints volume and face count confirming the shape is non-empty. After any boolean operation (-, +, &) call measure(topology) or measure(volume) to confirm it succeeded before calling render_view."""
     return execute_code(_session, code)
 
 
 @mcp.tool()
 def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
-    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path to save the PNG (extension auto-appended if omitted)."""
+    """Render model as PNG. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path to save the PNG (extension auto-appended if omitted)."""
     png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane, clip_at, azimuth, elevation, save_to)
     return Image(data=png_bytes, format="png")
 
 
 @mcp.tool()
 def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
-    """Query geometry. query: bounding_box, volume, area, min_wall_thickness, clearance, topology. topology returns face/edge/vertex counts — use it to verify a boolean cut happened. object_name/object_name2: named objects from show() (clearance requires both)."""
+    """Query geometry of a shape. Prefer measure over render_view when verifying geometry — numbers are unambiguous. query: bounding_box, volume, area, min_wall_thickness, clearance, topology. topology (face/edge/vertex counts) is the fastest way to confirm a boolean operation succeeded: a cut that failed leaves the counts unchanged. object_name/object_name2: named objects from show() (clearance requires both)."""
     return measure_fn(_session, query, object_name, object_name2)
 
 
@@ -102,6 +102,48 @@ def reset() -> str:
     return "Session reset."
 
 
+@mcp.tool()
+def workflow_hints() -> str:
+    """Return guidance on how to use these tools effectively. Call this at the start of a session or whenever unsure which tool to reach for."""
+    return """\
+BUILD123D-MCP WORKFLOW GUIDE
+
+1. MEASURE BEFORE YOU LOOK
+   After building or modifying geometry, verify with measure() before calling render_view.
+   Numbers are unambiguous; renders can look correct even when the geometry is wrong.
+   Recommended order: execute → measure → render_view (if you need to see it).
+
+2. VERIFY BOOLEAN OPERATIONS WITH TOPOLOGY
+   After any cut, union, or intersection, call measure(topology) on the result.
+   A successful boolean changes face/edge/vertex counts; a failed one leaves them unchanged.
+   measure(volume) confirms the magnitude of the change.
+
+3. MEASURE THE OBJECT IN QUESTION — NOT A PROXY
+   When debugging, call measure() on the actual disputed object.
+   Testing an isolated reconstruction and using that as proof of the full assembly is a
+   common mistake — the two may differ in ways that matter.
+
+4. NAME AND AUDIT YOUR SHAPES
+   Use show(shape, "name") after creating important geometry.
+   The execute() output immediately confirms name, volume, and face count.
+   Call list_objects() any time to see all registered shapes and their geometry.
+
+5. CHECKPOINT BEFORE EXPERIMENTS
+   Call save_snapshot("name") before any operation you might want to undo.
+   Snapshots are instant. restore_snapshot("name") reverts geometry without re-running code.
+
+6. CROSS-SECTIONS FOR INTERNAL GEOMETRY
+   render_view with clip_plane + clip_at reveals interior features.
+   Use clip_at to position the cut at a specific world coordinate, not just the midpoint.
+   Combine with measure(topology) on the unclipped shape to confirm what you see.
+
+7. PART LIBRARY
+   search_library("keyword") returns full parameter specs.
+   Call load_part("name", '{"param": value}') immediately — no second lookup needed.
+   Unspecified parameters use the defaults shown in search results.
+"""
+
+
 def main():
     import argparse
     import os
@@ -131,6 +173,7 @@ Available tools:
   load_part         Load a named part with optional parameter overrides (requires --library)
   save_snapshot     Save a named geometric checkpoint
   restore_snapshot  Restore geometry from a named checkpoint
+  workflow_hints    Return guidance on using these tools effectively
   reset             Clear the session (namespace, shapes, snapshots)
 
 Part library file format (Python, any .py file under --library path):
