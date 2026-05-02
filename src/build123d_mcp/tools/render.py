@@ -56,6 +56,9 @@ def render_view(
     objects: str = "",
     quality: str = "standard",
     clip_plane: str = "",
+    clip_at: float = None,
+    azimuth: float = 0.0,
+    elevation: float = 0.0,
 ) -> bytes:
     direction = direction.lower()
     if direction not in ("top", "front", "side", "iso"):
@@ -88,8 +91,10 @@ def render_view(
             mesh = pv.read(stl_path)
 
             if clip_plane:
-                center = mesh.center
-                origin = list(center)
+                if clip_at is not None:
+                    origin = {"x": [clip_at, 0, 0], "y": [0, clip_at, 0], "z": [0, 0, clip_at]}[clip_plane]
+                else:
+                    origin = list(mesh.center)
                 mesh = mesh.clip(normal=clip_plane, origin=origin, invert=False)
 
             plotter.add_mesh(
@@ -111,6 +116,12 @@ def render_view(
             plotter.view_yz()
         else:
             plotter.view_isometric()
+
+        if azimuth != 0.0 or elevation != 0.0:
+            plotter.camera.Azimuth(azimuth)
+            plotter.camera.Elevation(elevation)
+            plotter.camera.OrthogonalizeViewUp()
+            plotter.reset_camera_clipping_range()
 
         plotter.screenshot(png_path)
         plotter.close()

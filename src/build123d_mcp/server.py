@@ -18,15 +18,15 @@ def execute(code: str) -> str:
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "") -> Image:
-    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, or z to slice at midpoint."""
-    png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane)
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float = None, azimuth: float = 0.0, elevation: float = 0.0) -> Image:
+    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset."""
+    png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane, clip_at, azimuth, elevation)
     return Image(data=png_bytes, format="png")
 
 
 @mcp.tool()
 def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
-    """Query geometry. query: bounding_box, volume, area, min_wall_thickness, clearance. object_name/object_name2: named objects from show() (clearance requires both)."""
+    """Query geometry. query: bounding_box, volume, area, min_wall_thickness, clearance, topology. topology returns face/edge/vertex counts — use it to verify a boolean cut happened. object_name/object_name2: named objects from show() (clearance requires both)."""
     return measure_fn(_session, query, object_name, object_name2)
 
 

@@ -70,4 +70,11 @@ def measure(session, query: str = "bounding_box", object_name: str = "", object_
         t = _min_wall_thickness(shape)
         return json.dumps({"min_wall_thickness": t}, indent=2)
 
-    raise ValueError(f"Unknown query '{query}'. Use: bounding_box, volume, area, min_wall_thickness, clearance")
+    if query == "topology":
+        return json.dumps({
+            "faces": len(shape.faces()),
+            "edges": len(shape.edges()),
+            "vertices": len(shape.vertices()),
+        }, indent=2)
+
+    raise ValueError(f"Unknown query '{query}'. Use: bounding_box, volume, area, min_wall_thickness, clearance, topology")
