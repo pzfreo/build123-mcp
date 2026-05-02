@@ -78,7 +78,7 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
     if op == "save_snapshot":
         name = args["name"]
         session.save_snapshot(name)
-        saved = ["current_shape"] + list(session.snapshots[name]["objects"].keys())
+        saved = (["current_shape"] if session.current_shape is not None else []) + list(session.snapshots[name]["objects"].keys())
         return f"Snapshot '{name}' saved. Geometry captured: {', '.join(saved) if saved else 'none'}."
 
     if op == "restore_snapshot":
@@ -87,7 +87,7 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
             session.restore_snapshot(name)
         except KeyError as e:
             return f"Error: {e}"
-        restored = ["current_shape"] + list(session.objects.keys())
+        restored = (["current_shape"] if session.current_shape is not None else []) + list(session.objects.keys())
         return f"Snapshot '{name}' restored. Active geometry: {', '.join(restored) if restored else 'none'}."
 
     if op == "reset":
