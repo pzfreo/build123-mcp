@@ -85,8 +85,8 @@ def test_scan_finds_root_parts(index):
 
 def test_scan_finds_subdirectory_part(index):
     index.ensure_fresh()
-    assert "bare" in index._index
-    assert index._index["bare"]["category"] == "hardware"
+    assert "hardware/bare" in index._index
+    assert index._index["hardware/bare"]["category"] == "hardware"
 
 
 def test_scan_ignores_non_py_files(tmp_path):
@@ -108,7 +108,7 @@ def test_scan_extracts_metadata(index):
 
 def test_scan_part_without_part_info(index):
     index.ensure_fresh()
-    bare = index._index["bare"]
+    bare = index._index["hardware/bare"]
     assert bare["description"] == ""
     assert bare["tags"] == []
     assert bare["parameters"] == {}
@@ -143,7 +143,7 @@ def test_no_rescan_when_nothing_changed(tmp_path):
 def test_search_empty_returns_all(index):
     results = index.search("")
     names = {r["name"] for r in results}
-    assert {"box", "cylinder", "bare"} == names
+    assert {"box", "cylinder", "hardware/bare"} == names
 
 
 def test_search_by_keyword(index):
@@ -161,7 +161,7 @@ def test_search_by_tag(index):
 def test_search_by_category(index):
     results = index.search("hardware")
     assert len(results) == 1
-    assert results[0]["name"] == "bare"
+    assert results[0]["name"] == "hardware/bare"
 
 
 def test_search_no_match(index):
@@ -221,9 +221,9 @@ def test_load_part_returns_feedback(session, index):
 
 
 def test_load_part_bare_no_params(session, index):
-    result = load_part(session, index, "bare")
-    assert "bare" in session.objects
-    assert abs(session.objects["bare"].volume - 8.0) < 0.1  # 2*2*2
+    result = load_part(session, index, "hardware/bare")
+    assert "hardware/bare" in session.objects
+    assert abs(session.objects["hardware/bare"].volume - 8.0) < 0.1  # 2*2*2
 
 
 def test_load_part_unknown_raises(session, index):
