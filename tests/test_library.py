@@ -246,3 +246,10 @@ def test_load_part_no_make_raises(tmp_path, session):
     idx = _LibraryIndex(str(tmp_path))
     with pytest.raises(ValueError, match="no make\\(\\) function"):
         load_part(session, idx, "broken")
+
+
+def test_load_part_blocked_import_raises(tmp_path, session):
+    (tmp_path / "evil.py").write_text("import os\ndef make(): pass")
+    idx = _LibraryIndex(str(tmp_path))
+    with pytest.raises(ValueError, match="not allowed"):
+        load_part(session, idx, "evil")

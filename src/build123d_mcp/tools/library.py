@@ -135,9 +135,10 @@ def load_part(session, index: _LibraryIndex, name: str, params: str = "") -> str
         )
 
     # Execute part file in isolated restricted namespace
-    from build123d_mcp.security import make_restricted_builtins
+    from build123d_mcp.security import check_ast, make_restricted_builtins
     with open(entry["path"]) as f:
         source = f.read()
+    check_ast(source)
     namespace: dict[str, Any] = {"__builtins__": make_restricted_builtins()}
     exec(compile(source, entry["path"], "exec"), namespace)  # noqa: S102
 
