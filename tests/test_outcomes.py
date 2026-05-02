@@ -345,7 +345,7 @@ def test_mcp_lists_all_tools():
 
     names = asyncio.run(_mcp_session(run))
     assert names == {"execute", "render_view", "measure", "export", "reset",
-                     "save_snapshot", "restore_snapshot", "interference"}
+                     "save_snapshot", "restore_snapshot", "interference", "list_objects"}
 
 
 def test_mcp_execute_and_measure_round_trip():

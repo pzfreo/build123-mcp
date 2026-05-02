@@ -81,6 +81,35 @@ def reset() -> str:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="build123d-mcp",
+        description="MCP server for interactive 3D CAD via build123d. Communicates over stdio.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+MCP client configuration example:
+  {
+    "mcpServers": {
+      "build123d": {
+        "command": "uvx",
+        "args": ["build123d-mcp"]
+      }
+    }
+  }
+
+Available tools:
+  execute           Run build123d Python code in the persistent session
+  render_view       Render model as PNG (direction, azimuth, elevation, clip_plane, clip_at, save_to)
+  measure           Query geometry: bounding_box, volume, area, topology, min_wall_thickness, clearance
+  export            Export model to STEP or STL
+  interference      Check intersection volume between two named shapes
+  list_objects      List all named shapes with volume, faces, edges, vertices
+  save_snapshot     Save a named geometric checkpoint
+  restore_snapshot  Restore geometry from a named checkpoint
+  reset             Clear the session (namespace, shapes, snapshots)
+""",
+    )
+    parser.parse_args()
     mcp.run()
 
 
