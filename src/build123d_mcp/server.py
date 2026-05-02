@@ -6,6 +6,7 @@ from build123d_mcp.tools.render import render_view as render_view_fn
 from build123d_mcp.tools.measure import measure as measure_fn
 from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference as interference_fn
+from build123d_mcp.tools.list_objects import list_objects as list_objects_fn
 
 mcp = FastMCP("build123d-mcp")
 _session = Session()
@@ -18,15 +19,15 @@ def execute(code: str) -> str:
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "") -> Image:
-    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, or z to slice at midpoint."""
-    png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane)
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
+    """Render model as PNG. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path to save the PNG (extension auto-appended if omitted)."""
+    png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane, clip_at, azimuth, elevation, save_to)
     return Image(data=png_bytes, format="png")
 
 
 @mcp.tool()
 def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
-    """Query geometry. query: bounding_box, volume, area, min_wall_thickness, clearance. object_name/object_name2: named objects from show() (clearance requires both)."""
+    """Query geometry. query: bounding_box, volume, area, min_wall_thickness, clearance, topology. topology returns face/edge/vertex counts — use it to verify a boolean cut happened. object_name/object_name2: named objects from show() (clearance requires both)."""
     return measure_fn(_session, query, object_name, object_name2)
 
 
@@ -40,6 +41,12 @@ def export(filename: str, format: str = "step", object_name: str = "") -> str:
 def interference(object_a: str, object_b: str) -> str:
     """Check whether two named objects (from show()) intersect. Returns interferes (bool), volume (mm³ of overlap), and bounds of the interference region."""
     return interference_fn(_session, object_a, object_b)
+
+
+@mcp.tool()
+def list_objects() -> str:
+    """List all named shapes registered via show(), each with volume (mm³), face, edge, and vertex counts. Call this to audit session state without guessing what show() has been called on."""
+    return list_objects_fn(_session)
 
 
 @mcp.tool()
@@ -74,6 +81,35 @@ def reset() -> str:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="build123d-mcp",
+        description="MCP server for interactive 3D CAD via build123d. Communicates over stdio.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+MCP client configuration example:
+  {
+    "mcpServers": {
+      "build123d": {
+        "command": "uvx",
+        "args": ["build123d-mcp"]
+      }
+    }
+  }
+
+Available tools:
+  execute           Run build123d Python code in the persistent session
+  render_view       Render model as PNG (direction, azimuth, elevation, clip_plane, clip_at, save_to)
+  measure           Query geometry: bounding_box, volume, area, topology, min_wall_thickness, clearance
+  export            Export model to STEP or STL
+  interference      Check intersection volume between two named shapes
+  list_objects      List all named shapes with volume, faces, edges, vertices
+  save_snapshot     Save a named geometric checkpoint
+  restore_snapshot  Restore geometry from a named checkpoint
+  reset             Clear the session (namespace, shapes, snapshots)
+""",
+    )
+    parser.parse_args()
     mcp.run()
 
 

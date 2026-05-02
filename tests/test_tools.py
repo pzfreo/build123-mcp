@@ -8,6 +8,7 @@ from build123d_mcp.tools.execute import execute_code
 from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference
 from build123d_mcp.tools.measure import measure
+from build123d_mcp.tools.list_objects import list_objects
 from build123d_mcp.tools.render import render_view
 
 
@@ -471,3 +472,122 @@ def test_interference_unknown_object_raises(session):
     execute_code(session, "show(Box(10, 10, 10), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
         interference(session, "a", "missing")
+
+
+# --- measure topology (new) ---
+
+def test_measure_topology_box(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(measure(session, "topology"))
+    assert data["faces"] == 6
+    assert data["edges"] == 12
+    assert data["vertices"] == 8
+
+
+def test_measure_topology_increases_after_boolean_cut(session):
+    # A box with a cylindrical hole punched through has more than 6 faces
+    execute_code(session, "result = Box(20, 20, 20) - Cylinder(3, 30)")
+    data = json.loads(measure(session, "topology"))
+    assert data["faces"] > 6
+
+
+def test_measure_topology_named_object(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    data = json.loads(measure(session, "topology", "cube"))
+    assert data["faces"] == 6
+
+
+# --- render_view azimuth/elevation (new) ---
+
+def test_render_view_azimuth_returns_png(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    png = render_view(session, "iso", azimuth=45.0)
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_elevation_returns_png(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    png = render_view(session, "iso", elevation=30.0)
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_azimuth_and_elevation_returns_png(session):
+    execute_code(session, "result = Cylinder(5, 20)")
+    png = render_view(session, "front", azimuth=20.0, elevation=15.0)
+    assert png[:8] == PNG_MAGIC
+
+
+# --- render_view clip_at (new) ---
+
+def test_render_view_clip_at_returns_png(session):
+    execute_code(session, "result = Cylinder(5, 20)")
+    png = render_view(session, "iso", clip_plane="z", clip_at=5.0)
+    assert png[:8] == PNG_MAGIC
+
+
+def test_render_view_clip_at_negative_returns_png(session):
+    execute_code(session, "result = Box(20, 20, 20)")
+    png = render_view(session, "iso", clip_plane="x", clip_at=-3.0)
+    assert png[:8] == PNG_MAGIC
+
+
+# --- render_view save_to (new) ---
+
+def test_render_view_save_to_writes_png(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    dest = str(tmp_path / "out")
+    png = render_view(session, "iso", save_to=dest)
+    assert png[:8] == PNG_MAGIC
+    assert os.path.exists(dest + ".png")
+    assert os.path.getsize(dest + ".png") > 0
+
+
+def test_render_view_save_to_with_extension(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    dest = str(tmp_path / "out.png")
+    render_view(session, "iso", save_to=dest)
+    assert os.path.exists(dest)
+
+
+def test_render_view_save_to_path_traversal_rejected(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Path traversal"):
+        render_view(session, "iso", save_to="../../tmp/evil")
+
+
+# --- show() feedback (new) ---
+
+def test_show_prints_volume_and_faces(session):
+    output = execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    assert "cube" in output
+    assert "volume" in output.lower() or "mm" in output
+
+
+def test_show_prints_feedback_without_name(session):
+    output = execute_code(session, "show(Box(5, 5, 5))")
+    assert "Registered" in output
+
+
+# --- list_objects (new) ---
+
+def test_list_objects_empty(session):
+    result = list_objects(session)
+    assert "No named objects" in result
+
+
+def test_list_objects_returns_all_shapes(session):
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
+    data = json.loads(list_objects(session))
+    names = [item["name"] for item in data]
+    assert "a" in names
+    assert "b" in names
+
+
+def test_list_objects_includes_geometry(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    data = json.loads(list_objects(session))
+    cube = next(item for item in data if item["name"] == "cube")
+    assert abs(cube["volume"] - 1000) < 0.1
+    assert cube["faces"] == 6
+    assert cube["edges"] == 12
+    assert cube["vertices"] == 8
