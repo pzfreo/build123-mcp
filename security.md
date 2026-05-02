@@ -18,6 +18,8 @@ Before `exec()` is called, the code is parsed and the AST is walked. The check r
 
 - `import <module>` or `from <module> import ...` where the root module is not in the allowlist
 - Direct calls to `eval`, `exec`, `compile`, `open`, `__import__`, `breakpoint`, `input`
+- Direct calls to `getattr`, `vars`, `dir`, `hasattr` (prevent string-based dunder bypass)
+- Any explicit access to a dunder attribute (name starts and ends with `__`)
 
 **Import allowlist:** `build123d`, `math`, `numpy`, `typing`, `collections`, `itertools`, `functools`, `copy`
 
@@ -27,15 +29,20 @@ This blocks common injection patterns before any code runs:
 - Network: `import socket`, `import urllib`, `import requests`, `import http`
 - Code injection: `eval(...)`, `exec(...)`
 - File I/O: `open(...)`
+- Subclass traversal: `().__class__.__bases__[0].__subclasses__()`
+- String-based dunder bypass: `getattr(obj, '__class__')`, `vars(obj)['__class__']`
+
+**Note on dunder blocking:** Python's operator syntax (`+`, `-`, `with`, `for`, etc.) and context managers compile to bytecode operations, not explicit `ast.Attribute` nodes. Blocking dunder attribute access in the AST does not affect operator overloading or `with` statements used by build123d.
 
 ### 2. Restricted builtins (namespace-level)
 
 The exec namespace's `__builtins__` is replaced with a filtered copy:
 
 - `open`, `eval`, `exec`, `compile`, `breakpoint`, `input` are removed outright
+- `getattr`, `vars`, `dir`, `hasattr` are removed (mirrors the AST-level block; defence-in-depth)
 - `__import__` is replaced with an allowlisted wrapper that enforces the same import allowlist at the namespace level
 
-This provides a second layer independent of AST inspection. If the AST check were somehow bypassed (e.g. by a future code path that skips it), the namespace `__import__` restriction still fires at runtime.
+This provides a second layer independent of AST inspection. If the AST check were somehow bypassed (e.g. by a future code path that skips it), the namespace-level restrictions still fire at runtime.
 
 ### 3. Execution timeout
 
@@ -51,18 +58,29 @@ These are not fixed by the current implementation. They are documented so users 
 
 ### Python sandbox escapes
 
-Python's object model exposes powerful introspection APIs that can bypass namespace-level restrictions:
+The most common subclass-traversal patterns are now blocked by the AST dunder check and the removal of `getattr`/`vars` from builtins:
 
 ```python
-# Access OS module via subclass traversal — not blocked
+# Blocked — ast.Attribute detects __class__, __bases__, __subclasses__
 [c for c in ().__class__.__bases__[0].__subclasses__()
  if 'Popen' in c.__name__][0](['id'])
 
-# Access globals of an imported function
-list.__class__.__mro__[-1].__subclasses__()
+# Blocked — getattr is removed from builtins
+getattr((), '__class__')
+
+# Blocked — vars is removed from builtins
+vars(())['__class__']
 ```
 
-These patterns are not blocked. Blocking them reliably requires a proper sandbox (see below).
+The remaining unblocked path is string-splitting that avoids the `__...__` pattern at parse time:
+
+```python
+# Not blocked — AST sees a string concatenation, not a dunder attribute
+attr = '__cla' + 'ss__'
+# ...but getattr is also blocked, so this cannot be called usefully
+```
+
+In practice this residual path requires `getattr`, which is removed from builtins. A determined attacker who can reach a build123d function that internally calls `getattr` on user-controlled input would still have a path, but this is a substantially higher bar than direct traversal.
 
 ### Build123d internals
 
