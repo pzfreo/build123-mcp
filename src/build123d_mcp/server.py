@@ -132,6 +132,7 @@ BUILD123D-MCP WORKFLOW GUIDE
 def main():
     import argparse
     import os
+    from importlib.metadata import version
     parser = argparse.ArgumentParser(
         prog="build123d-mcp",
         description="MCP server for interactive 3D CAD via build123d. Communicates over stdio.",
@@ -174,6 +175,7 @@ Part library file format (Python, any .py file under --library path):
       return Box(width, width, width)
 """,
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {version('build123d-mcp')}")
     parser.add_argument(
         "--library", metavar="PATH",
         default=os.environ.get("BUILD123D_PART_LIBRARY", ""),
