@@ -7,9 +7,15 @@ from build123d_mcp.tools.measure import measure as measure_fn
 from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference as interference_fn
 from build123d_mcp.tools.list_objects import list_objects as list_objects_fn
+from build123d_mcp.tools.library import (
+    _LibraryIndex,
+    search_library as search_library_fn,
+    load_part as load_part_fn,
+)
 
 mcp = FastMCP("build123d-mcp")
 _session = Session()
+_library_index: _LibraryIndex | None = None
 
 
 @mcp.tool()
@@ -41,6 +47,22 @@ def export(filename: str, format: str = "step", object_name: str = "") -> str:
 def interference(object_a: str, object_b: str) -> str:
     """Check whether two named objects (from show()) intersect. Returns interferes (bool), volume (mm³ of overlap), and bounds of the interference region."""
     return interference_fn(_session, object_a, object_b)
+
+
+@mcp.tool()
+def search_library(query: str = "") -> str:
+    """Search the part library. query: keywords matched against name, description, tags, category (empty returns all). Returns name, category, description, tags, and full parameter specs including types, defaults, and descriptions."""
+    if _library_index is None:
+        return "No part library configured. Start the server with --library PATH or set BUILD123D_PART_LIBRARY."
+    return search_library_fn(_library_index, query)
+
+
+@mcp.tool()
+def load_part(name: str, params: str = "") -> str:
+    """Load a named part from the library into the session. name: part name from search_library. params: optional JSON object of parameter overrides e.g. '{\"od\": 8.0, \"length\": 20.0}' — unspecified params use their defaults. The part is registered as a named object and becomes current_shape."""
+    if _library_index is None:
+        return "No part library configured. Start the server with --library PATH or set BUILD123D_PART_LIBRARY."
+    return load_part_fn(_session, _library_index, name, params)
 
 
 @mcp.tool()
@@ -82,6 +104,7 @@ def reset() -> str:
 
 def main():
     import argparse
+    import os
     parser = argparse.ArgumentParser(
         prog="build123d-mcp",
         description="MCP server for interactive 3D CAD via build123d. Communicates over stdio.",
@@ -92,7 +115,7 @@ MCP client configuration example:
     "mcpServers": {
       "build123d": {
         "command": "uvx",
-        "args": ["build123d-mcp"]
+        "args": ["build123d-mcp", "--library", "/path/to/parts"]
       }
     }
   }
@@ -104,12 +127,38 @@ Available tools:
   export            Export model to STEP or STL
   interference      Check intersection volume between two named shapes
   list_objects      List all named shapes with volume, faces, edges, vertices
+  search_library    Search the part library by keyword (requires --library)
+  load_part         Load a named part with optional parameter overrides (requires --library)
   save_snapshot     Save a named geometric checkpoint
   restore_snapshot  Restore geometry from a named checkpoint
   reset             Clear the session (namespace, shapes, snapshots)
+
+Part library file format (Python, any .py file under --library path):
+  PART_INFO = {
+      "description": "Short description",
+      "tags": ["tag1", "tag2"],
+      "parameters": {
+          "width": {"type": "float", "default": 10.0, "description": "width mm"},
+      }
+  }
+  from build123d import *
+  def make(width=10.0):
+      return Box(width, width, width)
 """,
     )
-    parser.parse_args()
+    parser.add_argument(
+        "--library", metavar="PATH",
+        default=os.environ.get("BUILD123D_PART_LIBRARY", ""),
+        help="Path to part library directory (overrides BUILD123D_PART_LIBRARY env var)",
+    )
+    args = parser.parse_args()
+
+    if args.library:
+        if not os.path.isdir(args.library):
+            parser.error(f"Library path is not a directory: {args.library}")
+        global _library_index
+        _library_index = _LibraryIndex(args.library)
+
     mcp.run()
 
 
