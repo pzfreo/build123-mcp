@@ -8,6 +8,7 @@ from build123d_mcp.tools.execute import execute_code
 from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference
 from build123d_mcp.tools.measure import measure
+from build123d_mcp.tools.list_objects import list_objects
 from build123d_mcp.tools.render import render_view
 
 
@@ -552,3 +553,41 @@ def test_render_view_save_to_path_traversal_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):
         render_view(session, "iso", save_to="../../tmp/evil")
+
+
+# --- show() feedback (new) ---
+
+def test_show_prints_volume_and_faces(session):
+    output = execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    assert "cube" in output
+    assert "volume" in output.lower() or "mm" in output
+
+
+def test_show_prints_feedback_without_name(session):
+    output = execute_code(session, "show(Box(5, 5, 5))")
+    assert "Registered" in output
+
+
+# --- list_objects (new) ---
+
+def test_list_objects_empty(session):
+    result = list_objects(session)
+    assert "No named objects" in result
+
+
+def test_list_objects_returns_all_shapes(session):
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
+    data = json.loads(list_objects(session))
+    names = [item["name"] for item in data]
+    assert "a" in names
+    assert "b" in names
+
+
+def test_list_objects_includes_geometry(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    data = json.loads(list_objects(session))
+    cube = next(item for item in data if item["name"] == "cube")
+    assert abs(cube["volume"] - 1000) < 0.1
+    assert cube["faces"] == 6
+    assert cube["edges"] == 12
+    assert cube["vertices"] == 8

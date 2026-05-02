@@ -27,6 +27,12 @@ class Session:
             if name is None:
                 name = "shape"
             objects[name] = shape
+            try:
+                vol = shape.volume
+                faces = len(shape.faces())
+                print(f"Registered '{name}': volume={vol:.4g} mm³, faces={faces}")
+            except Exception:
+                print(f"Registered '{name}'")
 
         self.namespace["show"] = show
 

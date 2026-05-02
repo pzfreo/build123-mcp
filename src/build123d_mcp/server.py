@@ -6,6 +6,7 @@ from build123d_mcp.tools.render import render_view as render_view_fn
 from build123d_mcp.tools.measure import measure as measure_fn
 from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference as interference_fn
+from build123d_mcp.tools.list_objects import list_objects as list_objects_fn
 
 mcp = FastMCP("build123d-mcp")
 _session = Session()
@@ -40,6 +41,12 @@ def export(filename: str, format: str = "step", object_name: str = "") -> str:
 def interference(object_a: str, object_b: str) -> str:
     """Check whether two named objects (from show()) intersect. Returns interferes (bool), volume (mm³ of overlap), and bounds of the interference region."""
     return interference_fn(_session, object_a, object_b)
+
+
+@mcp.tool()
+def list_objects() -> str:
+    """List all named shapes registered via show(), each with volume (mm³), face, edge, and vertex counts. Call this to audit session state without guessing what show() has been called on."""
+    return list_objects_fn(_session)
 
 
 @mcp.tool()
