@@ -182,9 +182,10 @@ class WorkerSession:
     # --- Session-compatible interface ---
 
     def execute(self, code: str) -> str:
+        from build123d_mcp.security import ExecutionTimeout
         try:
             return self._call("execute", {"code": code}, self._exec_timeout)
-        except RuntimeError as e:
+        except (RuntimeError, ExecutionTimeout) as e:
             return f"Error: {e}"
 
     def render_view(
