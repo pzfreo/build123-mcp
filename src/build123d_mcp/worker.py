@@ -128,8 +128,8 @@ class WorkerSession:
         self._start_worker()
 
     def _start_worker(self) -> None:
-        parent_conn, child_conn = multiprocessing.Pipe()
         ctx = multiprocessing.get_context("spawn")
+        parent_conn, child_conn = ctx.Pipe()
         self._proc = ctx.Process(
             target=worker_main,
             args=(child_conn, self._library_path),
