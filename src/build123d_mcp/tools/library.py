@@ -48,9 +48,10 @@ class _LibraryIndex:
                 if not filename.endswith(".py"):
                     continue
                 filepath = os.path.join(dirpath, filename)
-                name = os.path.splitext(filename)[0]
+                stem = os.path.splitext(filename)[0]
                 rel = os.path.relpath(dirpath, self.library_path)
                 category = "" if rel == "." else rel
+                name = f"{category}/{stem}" if category else stem
                 try:
                     with open(filepath) as f:
                         source = f.read()
