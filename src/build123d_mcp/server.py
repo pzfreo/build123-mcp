@@ -25,7 +25,7 @@ def execute(code: str) -> str:
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
     """Render model as PNG. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path to save the PNG (extension auto-appended if omitted)."""
     png_bytes = render_view_fn(_session, direction, objects, quality, clip_plane, clip_at, azimuth, elevation, save_to)
     return Image(data=png_bytes, format="png")

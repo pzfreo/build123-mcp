@@ -2,6 +2,7 @@ import ast
 import json
 import os
 import time
+from typing import Any
 
 
 def _extract_part_info(source: str) -> dict:
@@ -136,7 +137,7 @@ def load_part(session, index: _LibraryIndex, name: str, params: str = "") -> str
     from build123d_mcp.security import make_restricted_builtins
     with open(entry["path"]) as f:
         source = f.read()
-    namespace = {"__builtins__": make_restricted_builtins()}
+    namespace: dict[str, Any] = {"__builtins__": make_restricted_builtins()}
     exec(compile(source, entry["path"], "exec"), namespace)  # noqa: S102
 
     if "make" not in namespace:

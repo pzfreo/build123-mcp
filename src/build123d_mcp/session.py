@@ -1,11 +1,12 @@
 import io
 from contextlib import redirect_stdout, redirect_stderr
+from typing import Any
 
 from build123d_mcp.security import (
     EXEC_TIMEOUT_SECONDS,
     ExecutionTimeout,
     check_ast,
-    exec_with_timeout,
+    exec_in_subprocess,
     make_restricted_builtins,
 )
 
@@ -13,17 +14,17 @@ from build123d_mcp.security import (
 class Session:
     def __init__(self, exec_timeout: int = EXEC_TIMEOUT_SECONDS):
         self.exec_timeout = exec_timeout
-        self.namespace = {}
-        self.current_shape = None
-        self.objects = {}
-        self.snapshots = {}
+        self.namespace: dict[str, Any] = {}
+        self.current_shape: Any = None
+        self.objects: dict[str, Any] = {}
+        self.snapshots: dict[str, Any] = {}
         self._inject_builtins()
 
-    def _inject_builtins(self):
+    def _inject_builtins(self) -> None:
         self.namespace["__builtins__"] = make_restricted_builtins()
         objects = self.objects
 
-        def show(shape, name=None):
+        def show(shape: Any, name: str | None = None) -> None:
             if name is None:
                 name = "shape"
             objects[name] = shape
@@ -44,26 +45,34 @@ class Session:
             return f"Error: SecurityError: {e}"
 
         try:
-            compiled = compile(code, "<mcp>", "exec")
+            compile(code, "<mcp>", "exec")
         except SyntaxError as e:
             return f"Error: SyntaxError: {e}"
 
-        buf = io.StringIO()
-        keys_before = set(self.namespace.keys())
+        user_ns = {k: v for k, v in self.namespace.items() if k not in ("__builtins__", "show")}
+        keys_before = set(user_ns.keys())
+
         try:
-            with redirect_stdout(buf), redirect_stderr(buf):
-                # Layer 3: timeout wraps the actual exec
-                exec_with_timeout(compiled, self.namespace, self.exec_timeout)
-            new_keys = set(self.namespace.keys()) - keys_before
-            self._update_current_shape(new_keys)
+            # Layer 3: runs in a forked child process; hard-killed on timeout
+            stdout, exc, new_namespace, show_calls = exec_in_subprocess(
+                code, user_ns, self.exec_timeout
+            )
         except ExecutionTimeout as e:
             return f"Error: ExecutionTimeout: {e}"
-        except Exception as e:
-            return f"Error: {type(e).__name__}: {e}"
-        output = buf.getvalue()
-        return output if output else "OK"
 
-    def _update_current_shape(self, new_keys):
+        if exc is not None:
+            return f"Error: {type(exc).__name__}: {exc}"
+
+        self.namespace.update(new_namespace)
+        for name, shape in show_calls:
+            self.objects[name] = shape
+
+        new_keys = set(new_namespace.keys()) - keys_before
+        self._update_current_shape(new_keys)
+
+        return stdout if stdout else "OK"
+
+    def _update_current_shape(self, new_keys: set[str]) -> None:
         try:
             from build123d import Shape, BuildPart
         except ImportError:
@@ -105,7 +114,7 @@ class Session:
         self.objects.clear()
         self.objects.update(snap["objects"])
 
-    def reset(self):
+    def reset(self) -> None:
         self.namespace.clear()
         self.current_shape = None
         self.objects.clear()

@@ -1,4 +1,24 @@
 import json
+from typing import Any
+
+
+def _compute_interference(shape_a: Any, shape_b: Any) -> tuple:
+    """Run in a fork subprocess — keeps OCC/TBB threads out of the parent."""
+    try:
+        inter = shape_a & shape_b
+        vol = inter.volume
+    except Exception:
+        return (False, 0.0, None)
+
+    if vol < 1e-6:
+        return (False, 0.0, None)
+
+    bb = inter.bounding_box()
+    return (True, vol, {
+        "xmin": bb.min.X, "xmax": bb.max.X,
+        "ymin": bb.min.Y, "ymax": bb.max.Y,
+        "zmin": bb.min.Z, "zmax": bb.max.Z,
+    })
 
 
 def interference(session, object_a: str, object_b: str) -> str:
@@ -9,22 +29,14 @@ def interference(session, object_a: str, object_b: str) -> str:
     shape_a = session.objects[object_a]
     shape_b = session.objects[object_b]
 
-    try:
-        inter = shape_a & shape_b
-        vol = inter.volume
-    except Exception:
+    from build123d_mcp.security import run_occ_in_fork
+    interferes, volume, bounds = run_occ_in_fork(_compute_interference, shape_a, shape_b, timeout_sec=30)
+
+    if not interferes:
         return json.dumps({"interferes": False, "volume": 0.0}, indent=2)
 
-    if vol < 1e-6:
-        return json.dumps({"interferes": False, "volume": 0.0}, indent=2)
-
-    bb = inter.bounding_box()
     return json.dumps({
         "interferes": True,
-        "volume": vol,
-        "bounds": {
-            "xmin": bb.min.X, "xmax": bb.max.X,
-            "ymin": bb.min.Y, "ymax": bb.max.Y,
-            "zmin": bb.min.Z, "zmax": bb.max.Z,
-        },
+        "volume": volume,
+        "bounds": bounds,
     }, indent=2)
