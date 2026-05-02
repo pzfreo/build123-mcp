@@ -528,3 +528,27 @@ def test_render_view_clip_at_negative_returns_png(session):
     execute_code(session, "result = Box(20, 20, 20)")
     png = render_view(session, "iso", clip_plane="x", clip_at=-3.0)
     assert png[:8] == PNG_MAGIC
+
+
+# --- render_view save_to (new) ---
+
+def test_render_view_save_to_writes_png(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    dest = str(tmp_path / "out")
+    png = render_view(session, "iso", save_to=dest)
+    assert png[:8] == PNG_MAGIC
+    assert os.path.exists(dest + ".png")
+    assert os.path.getsize(dest + ".png") > 0
+
+
+def test_render_view_save_to_with_extension(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    dest = str(tmp_path / "out.png")
+    render_view(session, "iso", save_to=dest)
+    assert os.path.exists(dest)
+
+
+def test_render_view_save_to_path_traversal_rejected(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Path traversal"):
+        render_view(session, "iso", save_to="../../tmp/evil")

@@ -59,6 +59,7 @@ def render_view(
     clip_at: float = None,
     azimuth: float = 0.0,
     elevation: float = 0.0,
+    save_to: str = "",
 ) -> bytes:
     direction = direction.lower()
     if direction not in ("top", "front", "side", "iso"):
@@ -127,4 +128,15 @@ def render_view(
         plotter.close()
 
         with open(png_path, "rb") as f:
-            return f.read()
+            png_bytes = f.read()
+
+    if save_to:
+        from pathlib import PurePosixPath, PureWindowsPath
+        if ".." in PurePosixPath(save_to).parts or ".." in PureWindowsPath(save_to).parts:
+            raise ValueError("Path traversal not allowed.")
+        dest = save_to if save_to.lower().endswith(".png") else save_to + ".png"
+        import os as _os
+        with open(_os.path.realpath(dest), "wb") as f:
+            f.write(png_bytes)
+
+    return png_bytes
