@@ -15,7 +15,6 @@ def _resolve_shape(session, object_name: str):
 
 
 def _stl_write(shape, abs_path: str) -> None:
-    """Run in a fork subprocess — keeps OCC/TBB threads out of the parent."""
     from build123d import Mesher
     mesher = Mesher()
     mesher.add_shape(shape)

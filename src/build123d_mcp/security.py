@@ -122,7 +122,7 @@ def make_restricted_builtins() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Layer 3: Subprocess execution with hard kill on timeout
+# Timeout exception (raised by SIGALRM in Session or propagated by WorkerSession)
 # ---------------------------------------------------------------------------
 
 class ExecutionTimeout(Exception):

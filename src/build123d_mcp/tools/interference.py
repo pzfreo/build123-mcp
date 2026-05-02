@@ -3,7 +3,6 @@ from typing import Any
 
 
 def _compute_interference(shape_a: Any, shape_b: Any) -> tuple:
-    """Run in a fork subprocess — keeps OCC/TBB threads out of the parent."""
     try:
         inter = shape_a & shape_b
         vol = inter.volume

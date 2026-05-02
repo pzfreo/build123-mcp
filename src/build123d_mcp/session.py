@@ -45,7 +45,7 @@ class Session:
             return f"Error: SecurityError: {e}"
 
         try:
-            compile(code, "<mcp>", "exec")
+            compiled = compile(code, "<mcp>", "exec")
         except SyntaxError as e:
             return f"Error: SyntaxError: {e}"
 
@@ -54,7 +54,9 @@ class Session:
         buf = io.StringIO()
         exc: Exception | None = None
 
-        # Layer 3: SIGALRM timeout (Unix main-thread only; silently skipped otherwise)
+        # Layer 3: SIGALRM timeout (Unix main-thread only; silently skipped otherwise).
+        # Fire 2s before the parent's conn.poll() deadline so the worker always
+        # returns a response before the parent kills it.
         _alarm_set = False
         _old_handler: Any = None
         try:
@@ -63,14 +65,14 @@ class Session:
                     f"Code exceeded the {self.exec_timeout}s execution time limit."
                 )
             _old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(self.exec_timeout)
+            signal.alarm(max(1, self.exec_timeout - 2))
             _alarm_set = True
         except (OSError, ValueError, AttributeError):
             pass  # Windows (no SIGALRM) or non-main thread; no timeout protection
 
         try:
             with redirect_stdout(buf), redirect_stderr(buf):
-                exec(compile(code, "<mcp>", "exec"), self.namespace)  # noqa: S102
+                exec(compiled, self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
             return f"Error: ExecutionTimeout: {e}"
         except Exception as e:

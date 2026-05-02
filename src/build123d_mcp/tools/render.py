@@ -51,7 +51,6 @@ def _resolve_shapes(session, objects: str):
 
 
 def _do_render(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation) -> bytes:
-    """Run pyvista rendering in the current process.  Call only from a forked child."""
     import tempfile
     import pyvista as pv
     from build123d import Mesher
