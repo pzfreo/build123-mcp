@@ -106,6 +106,10 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from build123d_mcp.tools.library import load_part
         return load_part(session, library_index, args["name"], args.get("params", ""))
 
+    if op == "diff_snapshot":
+        from build123d_mcp.tools.diff import diff_snapshot
+        return diff_snapshot(session, args["snapshot_a"], args.get("snapshot_b", ""))
+
     raise ValueError(f"Unknown operation: '{op}'")
 
 
@@ -251,6 +255,9 @@ class WorkerSession:
             self._start_worker()
             return "Session reset."
         return self._call("reset", {}, self._SHORT_TIMEOUT)
+
+    def diff_snapshot(self, snapshot_a: str, snapshot_b: str = "") -> str:
+        return self._call("diff_snapshot", {"snapshot_a": snapshot_a, "snapshot_b": snapshot_b}, self._SHORT_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)

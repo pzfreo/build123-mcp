@@ -9,6 +9,7 @@ from build123d_mcp.tools.execute import execute_code
 from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference
 from build123d_mcp.tools.measure import measure
+from build123d_mcp.tools.diff import diff_snapshot
 from build123d_mcp.tools.list_objects import list_objects
 from build123d_mcp.tools.render import render_view
 
@@ -735,3 +736,121 @@ def test_list_objects_includes_geometry(session):
     assert cube["faces"] == 6
     assert cube["edges"] == 12
     assert cube["vertices"] == 8
+
+
+# --- auto-diagnostics after execute ---
+
+def test_execute_auto_diagnostics_on_new_shape(session):
+    result = execute_code(session, "result = Box(10, 10, 10)")
+    assert "current_shape" in result
+    assert "volume" in result
+    assert "mm³" in result
+
+
+def test_execute_auto_diagnostics_includes_topology(session):
+    result = execute_code(session, "result = Box(10, 10, 10)")
+    assert "6f" in result
+
+
+def test_execute_auto_diagnostics_not_shown_without_shape(session):
+    result = execute_code(session, "x = 42")
+    assert "current_shape" not in result
+
+
+def test_execute_auto_diagnostics_not_shown_on_error(session):
+    result = execute_code(session, "result = Box(10, 10, 10)\nraise ValueError('oops')")
+    assert "Error" in result
+    assert "current_shape" not in result
+
+
+def test_execute_auto_diagnostics_not_repeated_when_shape_unchanged(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    result = execute_code(session, "x = 99")
+    assert "current_shape" not in result
+
+
+# --- assertion / constraint support ---
+
+def test_assert_passing_does_not_error(session):
+    result = execute_code(session, "result = Box(10, 10, 10)\nassert result.volume > 500")
+    assert "Error" not in result
+    assert "Constraint" not in result
+
+
+def test_assert_failing_returns_constraint_failed(session):
+    result = execute_code(session, "result = Box(10, 10, 10)\nassert result.volume > 9999, 'volume too small'")
+    assert result.startswith("Constraint failed")
+    assert "volume too small" in result
+
+
+def test_assert_failing_with_no_message(session):
+    result = execute_code(session, "assert False")
+    assert "Constraint failed" in result
+
+
+def test_assert_failure_does_not_update_current_shape(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    shape_before = session.current_shape
+    execute_code(session, "result = Box(5, 5, 5)\nassert False")
+    assert session.current_shape is shape_before
+
+
+# --- diff_snapshot ---
+
+def test_diff_snapshot_vs_current(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("v1")
+    execute_code(session, "result = Box(10, 10, 5)")
+    result = diff_snapshot(session, "v1")
+    assert "v1" in result
+    assert "current" in result
+    assert "volume" in result
+
+
+def test_diff_snapshot_shows_volume_delta(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("before")
+    execute_code(session, "result = Box(10, 10, 5)")
+    result = diff_snapshot(session, "before")
+    assert "Δ" in result
+    assert "-500" in result or "500" in result
+
+
+def test_diff_snapshot_two_named_snapshots(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("v1")
+    execute_code(session, "result = Box(10, 10, 20)")
+    session.save_snapshot("v2")
+    result = diff_snapshot(session, "v1", "v2")
+    assert "v1" in result
+    assert "v2" in result
+
+
+def test_diff_snapshot_shows_added_object(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("before")
+    execute_code(session, "show(Cylinder(5, 20), 'pin')")
+    result = diff_snapshot(session, "before")
+    assert "+ pin" in result or "pin (added)" in result
+
+
+def test_diff_snapshot_shows_removed_object(session):
+    execute_code(session, "show(Box(10, 10, 10), 'bracket')")
+    session.save_snapshot("with_bracket")
+    session.objects.clear()
+    result = diff_snapshot(session, "with_bracket")
+    assert "bracket" in result
+    assert "removed" in result
+
+
+def test_diff_snapshot_unknown_snapshot_a(session):
+    result = diff_snapshot(session, "no_such")
+    assert "Error" in result
+
+
+def test_diff_snapshot_unchanged_object_marked(session):
+    execute_code(session, "show(Box(10, 10, 10), 'base')")
+    session.save_snapshot("s1")
+    session.save_snapshot("s2")
+    result = diff_snapshot(session, "s1", "s2")
+    assert "unchanged" in result or "= base" in result
