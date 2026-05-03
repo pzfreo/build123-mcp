@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import sys
 
 import pytest
 
@@ -327,6 +328,16 @@ def test_clip_plane_produces_different_image_than_unclipped(session):
 # ---------------------------------------------------------------------------
 # MCP protocol round-trip: test through the actual stdio transport
 # ---------------------------------------------------------------------------
+# Skipped on Windows: each round-trip cold-imports build123d in a freshly
+# spawned worker (~60-90s on Windows runners), and pytest-timeout's "thread"
+# method (the only one available on Windows) cannot kill a hung asyncio.run,
+# so a stuck call blocks the entire test session indefinitely.
+
+_skip_mcp_on_win = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="MCP-stdio round-trip too slow on Windows; covered by Linux/macOS jobs",
+)
+
 
 async def _mcp_session(coro, cwd=None):
     from mcp.client.session import ClientSession
@@ -343,6 +354,7 @@ async def _mcp_session(coro, cwd=None):
             return await coro(mcp)
 
 
+@_skip_mcp_on_win
 def test_mcp_lists_all_tools():
     async def run(mcp):
         result = await mcp.list_tools()
@@ -354,6 +366,7 @@ def test_mcp_lists_all_tools():
                      "search_library", "load_part", "workflow_hints"}
 
 
+@_skip_mcp_on_win
 def test_mcp_execute_and_measure_round_trip():
     async def run(mcp):
         await mcp.call_tool(
@@ -369,6 +382,7 @@ def test_mcp_execute_and_measure_round_trip():
     assert abs(data["zsize"] - 30) < 0.01
 
 
+@_skip_mcp_on_win
 def test_mcp_render_returns_valid_png():
     async def run(mcp):
         await mcp.call_tool(
@@ -385,6 +399,7 @@ def test_mcp_render_returns_valid_png():
     assert base64.b64decode(data)[:8] == PNG_MAGIC
 
 
+@_skip_mcp_on_win
 def test_mcp_reset_clears_state():
     async def run(mcp):
         await mcp.call_tool(
@@ -400,6 +415,7 @@ def test_mcp_reset_clears_state():
     assert "No shape" in text
 
 
+@_skip_mcp_on_win
 def test_mcp_injection_attempt_returns_error_not_executes():
     """A shell-injection payload through the MCP wire returns an error and does
     not produce side-effects (geometry is still None at the start of the session)."""
@@ -414,6 +430,7 @@ def test_mcp_injection_attempt_returns_error_not_executes():
     assert "not allowed" in text.lower() or "SecurityError" in text
 
 
+@_skip_mcp_on_win
 def test_mcp_snapshot_save_and_restore():
     """save_snapshot / restore_snapshot round-trip through the MCP wire restores geometry."""
     async def run(mcp):
@@ -428,6 +445,7 @@ def test_mcp_snapshot_save_and_restore():
     assert abs(data["xsize"] - 10) < 0.01
 
 
+@_skip_mcp_on_win
 def test_mcp_multi_format_export(tmp_path):
     """export with format='step,stl' reports both paths over the MCP wire."""
     async def run(mcp):
@@ -440,6 +458,7 @@ def test_mcp_multi_format_export(tmp_path):
     assert ".stl" in text
 
 
+@_skip_mcp_on_win
 def test_mcp_volume_and_clearance():
     """volume and clearance round-trip through the MCP wire."""
     async def run(mcp):
@@ -457,6 +476,7 @@ def test_mcp_volume_and_clearance():
     assert abs(json.loads(cl_json)["clearance"] - 5) < 0.1
 
 
+@_skip_mcp_on_win
 def test_mcp_show_and_measure_named_object():
     """show() + per-object measure round-trip through the MCP wire."""
     async def run(mcp):
