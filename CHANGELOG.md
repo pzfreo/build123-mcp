@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.2
+
+### Packaging
+
+- Cap `requires-python` at `<3.14` so `uvx build123d-mcp` selects a compatible interpreter instead of trying to build `cadquery-ocp` from source on Python versions where it has no wheels.
+
+---
+
 ## v0.3.1
 
 ### Features
@@ -9,7 +17,6 @@
 ### CI
 
 - Fix TestPyPI publish failures: dev builds now use a unique `.devNNN` version suffix, and the patch version is auto-bumped in `pyproject.toml` after each release.
-- Cap `requires-python` at `<3.14` to surface a clear error for Python versions where `cadquery-ocp` has no wheels.
 
 ---
 
