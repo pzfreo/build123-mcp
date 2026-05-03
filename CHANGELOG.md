@@ -1,6 +1,19 @@
 # Changelog
 
-## v0.3.0 (unreleased)
+## v0.3.1
+
+### Features
+
+- Add `--version` flag to the CLI (`uvx build123d-mcp --version`).
+
+### CI
+
+- Fix TestPyPI publish failures: dev builds now use a unique `.devNNN` version suffix, and the patch version is auto-bumped in `pyproject.toml` after each release.
+- Cap `requires-python` at `<3.14` to surface a clear error for Python versions where `cadquery-ocp` has no wheels.
+
+---
+
+## v0.3.0
 
 ### Security
 
