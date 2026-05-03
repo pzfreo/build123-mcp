@@ -14,6 +14,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+      - name: Set dev version for TestPyPI
+        if: github.event_name == 'push'
+        run: |
+          current=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          uv version "${current}.dev${{ github.run_number }}"
       - run: uv build
       - uses: actions/upload-artifact@v4
         with:
@@ -49,3 +54,30 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  bump-version:
+    needs: publish-pypi
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Bump patch version
+        run: |
+          current=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          IFS='.' read -r major minor patch <<< "$current"
+          uv version "${major}.${minor}.$((patch + 1))"
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          new_version=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          git add pyproject.toml uv.lock
+          git commit -m "chore: bump version to ${new_version} after release"
+          git push
