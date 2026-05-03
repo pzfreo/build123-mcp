@@ -16,15 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux system dependencies for headless rendering
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y libgl1 libglu1-mesa xvfb libxrender1 libxi6
+      # Sets up xvfb on Linux and Mesa3D on Windows (no-op on macOS).
+      # vtk 9.3.1 ships no cp313 wheel, so pin Python below to 3.12.
+      - uses: pyvista/setup-headless-display-action@v3
 
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          python-version: "3.12"
 
       - name: Install dependencies
         run: uv sync --group dev
