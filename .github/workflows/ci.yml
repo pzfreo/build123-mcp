@@ -33,4 +33,4 @@ jobs:
         run: uv run mypy src/build123d_mcp/
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        run: uv run pytest tests/ -v --timeout=120
