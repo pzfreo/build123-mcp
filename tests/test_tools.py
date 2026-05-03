@@ -12,6 +12,15 @@ from build123d_mcp.tools.measure import measure
 from build123d_mcp.tools.list_objects import list_objects
 from build123d_mcp.tools.render import render_view
 
+# A path guaranteed to resolve outside any allowed write root (cwd, tempdir, /tmp)
+# on each platform. /etc/passwd on POSIX; on Windows we use the system hosts file,
+# which is always present and lives under C:\Windows so realpath stays under C:\Windows.
+_OUTSIDE_ROOT_PATH = (
+    r"C:\Windows\System32\drivers\etc\hosts"
+    if sys.platform == "win32"
+    else "/etc/passwd"
+)
+
 
 @pytest.fixture
 def session():
@@ -121,6 +130,20 @@ def test_import_build123d_allowed(session):
 def test_execution_timeout(fast_session):
     result = execute_code(fast_session, "while True: pass")
     assert "timeout" in result.lower() or "time limit" in result.lower()
+
+
+def test_worker_execution_timeout():
+    """The production timeout path (WorkerSession's parent-side multiprocessing
+    poll) works on every platform, including Windows where the in-process
+    SIGALRM guard is a no-op. A `while True: pass` must return a timeout error,
+    not hang the test."""
+    from build123d_mcp.worker import WorkerSession
+    ws = WorkerSession(exec_timeout=2)
+    try:
+        result = ws.execute("while True: pass")
+        assert "timeout" in result.lower() or "time limit" in result.lower()
+    finally:
+        ws._kill_worker()
 
 
 def test_blocked_import_does_not_corrupt_shape(session):
@@ -326,15 +349,50 @@ def test_export_invalid_format(session):
 
 def test_export_path_traversal_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    with pytest.raises(ValueError, match="Path traversal"):
+    with pytest.raises(ValueError, match="outside the allowed write roots"):
         export_file(session, "../../etc/passwd", "step")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-style absolute path; Windows uses drive-letter paths")
-def test_export_absolute_path_rejected(session):
+def test_export_outside_roots_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    with pytest.raises(ValueError, match="Path traversal"):
-        export_file(session, "/tmp/evil", "step")
+    with pytest.raises(ValueError, match="outside the allowed write roots"):
+        export_file(session, _OUTSIDE_ROOT_PATH, "step")
+
+
+def test_export_to_tmp_allowed(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    target = tmp_path / "exported.step"
+    result = export_file(session, str(target), "step")
+    assert os.path.exists(target)
+    assert str(target) in result
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="/tmp does not exist on Windows; tempfile.gettempdir() coverage in test_export_to_tmp_allowed already runs there")
+def test_export_to_slash_tmp_allowed(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    import tempfile as _tempfile
+    with _tempfile.NamedTemporaryFile(
+        prefix="build123d_mcp_test_", suffix=".step", dir="/tmp", delete=False
+    ) as f:
+        target = f.name
+    try:
+        export_file(session, target, "step")
+        assert os.path.exists(target)
+    finally:
+        if os.path.exists(target):
+            os.unlink(target)
+
+
+def test_export_symlink_escape_rejected(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    link = tmp_path / "escape.step"
+    os.symlink("/etc/passwd", link)
+    try:
+        with pytest.raises(ValueError, match="outside the allowed write roots"):
+            export_file(session, str(link), "step")
+    finally:
+        if link.is_symlink():
+            link.unlink()
 
 
 # --- reset ---
@@ -624,15 +682,21 @@ def test_render_view_save_to_with_extension(session, tmp_path, monkeypatch):
 
 def test_render_view_save_to_path_traversal_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    with pytest.raises(ValueError, match="Path traversal"):
-        render_view(session, "iso", save_to="../../tmp/evil")
+    with pytest.raises(ValueError, match="outside the allowed write roots"):
+        render_view(session, "iso", save_to="../../etc/passwd")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-style absolute path; Windows uses drive-letter paths")
-def test_render_view_save_to_absolute_path_rejected(session):
+def test_render_view_save_to_outside_roots_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    with pytest.raises(ValueError, match="Path traversal"):
-        render_view(session, "iso", save_to="/tmp/evil")
+    with pytest.raises(ValueError, match="outside the allowed write roots"):
+        render_view(session, "iso", save_to=_OUTSIDE_ROOT_PATH)
+
+
+def test_render_view_save_to_tmp_allowed(session, tmp_path):
+    execute_code(session, "result = Box(10, 10, 10)")
+    target = tmp_path / "render.png"
+    render_view(session, "iso", save_to=str(target))
+    assert os.path.exists(target)
 
 
 # --- show() feedback (new) ---

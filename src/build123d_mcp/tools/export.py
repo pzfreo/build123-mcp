@@ -1,5 +1,4 @@
-import os
-from pathlib import PurePosixPath, PureWindowsPath
+from build123d_mcp.tools._paths import safe_output_path
 
 _VALID_FORMATS = ("step", "stl")
 
@@ -32,10 +31,6 @@ def _write_one(shape, abs_path: str, fmt: str) -> None:
 def export_file(session, filename: str, format: str = "step", object_name: str = "") -> str:
     shape = _resolve_shape(session, object_name)
 
-    # Reject absolute paths and path traversal attempts
-    if os.path.isabs(filename) or ".." in PurePosixPath(filename).parts or ".." in PureWindowsPath(filename).parts:
-        raise ValueError("Path traversal not allowed.")
-
     formats = [f.strip().lower() for f in format.split(",") if f.strip()]
     if not formats:
         raise ValueError("No format specified.")
@@ -50,7 +45,7 @@ def export_file(session, filename: str, format: str = "step", object_name: str =
             path += ".step"
         elif fmt == "stl" and not path.lower().endswith(".stl"):
             path += ".stl"
-        abs_path = os.path.realpath(path)
+        abs_path = safe_output_path(path)
         _write_one(shape, abs_path, fmt)
         exported.append(abs_path)
 
