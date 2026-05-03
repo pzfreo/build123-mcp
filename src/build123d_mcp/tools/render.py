@@ -1,7 +1,6 @@
 import math
 import os
 import sys
-from pathlib import PurePosixPath, PureWindowsPath
 
 _xvfb_started = False
 
@@ -321,14 +320,6 @@ def _do_render_svg(shapes, direction, clip_plane, clip_at, azimuth, elevation) -
             return f.read()
 
 
-def _save_path_check(path: str) -> str:
-    """Validate `save_to` and return the absolute write path. Mirrors the
-    behaviour of the existing export tool."""
-    if os.path.isabs(path) or ".." in PurePosixPath(path).parts or ".." in PureWindowsPath(path).parts:
-        raise ValueError("Path traversal not allowed.")
-    return os.path.realpath(path)
-
-
 def render_view(
     session,
     direction: str = "iso",
@@ -398,16 +389,16 @@ def render_view(
         )
 
     if save_to:
-        abs_base = _save_path_check(save_to)
+        from build123d_mcp.tools._paths import safe_output_path
         # Strip a known extension so format='both' produces consistent <base>.png and <base>.svg
-        base, ext = os.path.splitext(abs_base)
+        base, ext = os.path.splitext(save_to)
         if ext.lower() in (".png", ".svg"):
-            abs_base = base
+            save_to = base
         if "png" in result:
-            with open(abs_base + ".png", "wb") as f:
+            with open(safe_output_path(save_to + ".png"), "wb") as f:
                 f.write(result["png"])
         if "svg" in result:
-            with open(abs_base + ".svg", "wb") as f:
+            with open(safe_output_path(save_to + ".svg"), "wb") as f:
                 f.write(result["svg"])
 
     return result
