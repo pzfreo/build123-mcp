@@ -1,4 +1,7 @@
+import base64
+
 from mcp.server.fastmcp import FastMCP, Image
+from mcp.types import ImageContent, TextContent
 
 from build123d_mcp.worker import WorkerSession
 
@@ -14,14 +17,25 @@ def execute(code: str) -> str:
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "") -> Image:
-    """Render model as PNG. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path to save the PNG (extension auto-appended if omitted)."""
-    png_bytes = _session.render_view(
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "", format: str = "png") -> list:
+    """Render model. format: 'png' (raster, default), 'svg' (HLR line drawing — works without a display, no shading but precise edges), or 'both' (returns the PNG and SVG together — useful when you want shaded depth cues plus crisp edge geometry). If the raster path fails (typically headless host with no display backend) and format='png', the server falls back to SVG automatically. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path; for format='both' the PNG and SVG are written as <save_to>.png and <save_to>.svg."""
+    result = _session.render_view(
         direction=direction, objects=objects, quality=quality,
         clip_plane=clip_plane, clip_at=clip_at, azimuth=azimuth,
-        elevation=elevation, save_to=save_to,
+        elevation=elevation, save_to=save_to, format=format,
     )
-    return Image(data=png_bytes, format="png")
+
+    contents: list = []
+    if "png" in result:
+        contents.append(Image(data=result["png"], format="png"))
+    if "svg" in result:
+        svg_b64 = base64.b64encode(result["svg"]).decode()
+        contents.append(ImageContent(type="image", data=svg_b64, mimeType="image/svg+xml"))
+    if result.get("fallback"):
+        contents.append(TextContent(type="text", text=result["fallback"]))
+    if result.get("png_error"):
+        contents.append(TextContent(type="text", text=f"PNG render failed: {result['png_error']}"))
+    return contents
 
 
 @mcp.tool()

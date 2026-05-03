@@ -96,14 +96,19 @@ def test_reset_discards_previous_geometry(session):
 
 
 def test_render_changes_when_model_changes(session):
-    """Rendering a different shape produces a different image."""
+    """Rendering a different shape produces a different image.
+
+    Note: the camera autofits to the bounds, so a uniform scale change
+    (Box(10) → Box(50)) renders identically. This test uses shapes that
+    differ in proportion, which is what actually changes the rendered pixels.
+    """
     execute_code(session, "result = Box(10, 10, 10)")
-    png_small = render_view(session, "iso")
-    execute_code(session, "result = Box(50, 50, 50)")
-    png_large = render_view(session, "iso")
-    assert png_small[:8] == PNG_MAGIC
-    assert png_large[:8] == PNG_MAGIC
-    assert png_small != png_large
+    png_cube = render_view(session, "iso")["png"]
+    execute_code(session, "result = Box(10, 30, 50)")
+    png_slab = render_view(session, "iso")["png"]
+    assert png_cube[:8] == PNG_MAGIC
+    assert png_slab[:8] == PNG_MAGIC
+    assert png_cube != png_slab
 
 
 def test_error_in_execute_preserves_current_shape(session):
@@ -218,8 +223,8 @@ def test_named_objects_have_independent_bounding_boxes(session):
 def test_assembly_render_differs_from_single_part_render(session):
     """Rendering all registered objects produces a different image than one part alone."""
     execute_code(session, "show(Box(10, 10, 10), 'box')\nshow(Cylinder(3, 30), 'cyl')")
-    png_all = render_view(session, "iso")
-    png_one = render_view(session, "iso", objects="box")
+    png_all = render_view(session, "iso")["png"]
+    png_one = render_view(session, "iso", objects="box")["png"]
     assert png_all[:8] == PNG_MAGIC
     assert png_one[:8] == PNG_MAGIC
     assert png_all != png_one
@@ -302,8 +307,8 @@ def test_clearance_zero_for_touching_shapes(session):
 def test_high_quality_render_differs_from_standard(session):
     """High quality tessellation produces a different image than standard."""
     execute_code(session, "result = Cylinder(5, 20)")
-    png_std = render_view(session, "iso", quality="standard")
-    png_hi = render_view(session, "iso", quality="high")
+    png_std = render_view(session, "iso", quality="standard")["png"]
+    png_hi = render_view(session, "iso", quality="high")["png"]
     assert png_std[:8] == PNG_MAGIC
     assert png_hi[:8] == PNG_MAGIC
     assert png_std != png_hi
@@ -312,8 +317,8 @@ def test_high_quality_render_differs_from_standard(session):
 def test_clip_plane_produces_different_image_than_unclipped(session):
     """A clipped render exposes internal geometry and differs from the unclipped view."""
     execute_code(session, "result = Cylinder(8, 30)")
-    png_full = render_view(session, "iso")
-    png_clip = render_view(session, "iso", clip_plane="y")
+    png_full = render_view(session, "iso")["png"]
+    png_clip = render_view(session, "iso", clip_plane="y")["png"]
     assert png_full[:8] == PNG_MAGIC
     assert png_clip[:8] == PNG_MAGIC
     assert png_full != png_clip
