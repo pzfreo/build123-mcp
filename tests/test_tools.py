@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import pytest
 
@@ -325,6 +326,7 @@ def test_export_path_traversal_rejected(session):
         export_file(session, "../../etc/passwd", "step")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-style absolute path; Windows uses drive-letter paths")
 def test_export_absolute_path_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):
@@ -622,6 +624,7 @@ def test_render_view_save_to_path_traversal_rejected(session):
         render_view(session, "iso", save_to="../../tmp/evil")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-style absolute path; Windows uses drive-letter paths")
 def test_render_view_save_to_absolute_path_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):

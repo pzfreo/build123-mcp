@@ -7,12 +7,17 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies for headless rendering
+      - name: Install Linux system dependencies for headless rendering
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
           sudo apt-get install -y libgl1 libglu1-mesa xvfb libxrender1 libxi6
@@ -25,6 +30,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Type check
+        if: runner.os == 'Linux'
         run: uv run mypy src/build123d_mcp/
 
       - name: Run tests
