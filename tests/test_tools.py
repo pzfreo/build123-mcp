@@ -114,6 +114,10 @@ def test_import_build123d_allowed(session):
     assert "Error" not in result
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Session.execute uses SIGALRM for timeout, which is POSIX-only; in-process timeout protection is not available on Windows (the WorkerSession parent-side timeout still works in production).",
+)
 def test_execution_timeout(fast_session):
     result = execute_code(fast_session, "while True: pass")
     assert "timeout" in result.lower() or "time limit" in result.lower()
