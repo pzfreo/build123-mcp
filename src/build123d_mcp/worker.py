@@ -198,7 +198,8 @@ class WorkerSession:
         azimuth: float = 0.0,
         elevation: float = 0.0,
         save_to: str = "",
-    ) -> bytes:
+        format: str = "png",
+    ) -> dict:
         return self._call(
             "render_view",
             {
@@ -210,6 +211,7 @@ class WorkerSession:
                 "azimuth": azimuth,
                 "elevation": elevation,
                 "save_to": save_to,
+                "format": format,
             },
             self._RENDER_TIMEOUT,
         )

@@ -7,25 +7,30 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies for headless rendering
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y libgl1 libglu1-mesa xvfb libxrender1 libxi6
+      # Sets up xvfb on Linux and Mesa3D on Windows (no-op on macOS).
+      # vtk 9.3.1 ships no cp313 wheel, so pin Python below to 3.12.
+      - uses: pyvista/setup-headless-display-action@v3
 
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          python-version: "3.12"
 
       - name: Install dependencies
         run: uv sync --group dev
 
       - name: Type check
+        if: runner.os == 'Linux'
         run: uv run mypy src/build123d_mcp/
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        run: uv run pytest tests/ -v --timeout=300

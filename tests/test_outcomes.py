@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import sys
 
 import pytest
 
@@ -96,14 +97,19 @@ def test_reset_discards_previous_geometry(session):
 
 
 def test_render_changes_when_model_changes(session):
-    """Rendering a different shape produces a different image."""
+    """Rendering a different shape produces a different image.
+
+    Note: the camera autofits to the bounds, so a uniform scale change
+    (Box(10) → Box(50)) renders identically. This test uses shapes that
+    differ in proportion, which is what actually changes the rendered pixels.
+    """
     execute_code(session, "result = Box(10, 10, 10)")
-    png_small = render_view(session, "iso")
-    execute_code(session, "result = Box(50, 50, 50)")
-    png_large = render_view(session, "iso")
-    assert png_small[:8] == PNG_MAGIC
-    assert png_large[:8] == PNG_MAGIC
-    assert png_small != png_large
+    png_cube = render_view(session, "iso")["png"]
+    execute_code(session, "result = Box(10, 30, 50)")
+    png_slab = render_view(session, "iso")["png"]
+    assert png_cube[:8] == PNG_MAGIC
+    assert png_slab[:8] == PNG_MAGIC
+    assert png_cube != png_slab
 
 
 def test_error_in_execute_preserves_current_shape(session):
@@ -218,8 +224,8 @@ def test_named_objects_have_independent_bounding_boxes(session):
 def test_assembly_render_differs_from_single_part_render(session):
     """Rendering all registered objects produces a different image than one part alone."""
     execute_code(session, "show(Box(10, 10, 10), 'box')\nshow(Cylinder(3, 30), 'cyl')")
-    png_all = render_view(session, "iso")
-    png_one = render_view(session, "iso", objects="box")
+    png_all = render_view(session, "iso")["png"]
+    png_one = render_view(session, "iso", objects="box")["png"]
     assert png_all[:8] == PNG_MAGIC
     assert png_one[:8] == PNG_MAGIC
     assert png_all != png_one
@@ -302,8 +308,8 @@ def test_clearance_zero_for_touching_shapes(session):
 def test_high_quality_render_differs_from_standard(session):
     """High quality tessellation produces a different image than standard."""
     execute_code(session, "result = Cylinder(5, 20)")
-    png_std = render_view(session, "iso", quality="standard")
-    png_hi = render_view(session, "iso", quality="high")
+    png_std = render_view(session, "iso", quality="standard")["png"]
+    png_hi = render_view(session, "iso", quality="high")["png"]
     assert png_std[:8] == PNG_MAGIC
     assert png_hi[:8] == PNG_MAGIC
     assert png_std != png_hi
@@ -312,8 +318,8 @@ def test_high_quality_render_differs_from_standard(session):
 def test_clip_plane_produces_different_image_than_unclipped(session):
     """A clipped render exposes internal geometry and differs from the unclipped view."""
     execute_code(session, "result = Cylinder(8, 30)")
-    png_full = render_view(session, "iso")
-    png_clip = render_view(session, "iso", clip_plane="y")
+    png_full = render_view(session, "iso")["png"]
+    png_clip = render_view(session, "iso", clip_plane="y")["png"]
     assert png_full[:8] == PNG_MAGIC
     assert png_clip[:8] == PNG_MAGIC
     assert png_full != png_clip
@@ -322,6 +328,16 @@ def test_clip_plane_produces_different_image_than_unclipped(session):
 # ---------------------------------------------------------------------------
 # MCP protocol round-trip: test through the actual stdio transport
 # ---------------------------------------------------------------------------
+# Skipped on Windows: each round-trip cold-imports build123d in a freshly
+# spawned worker (~60-90s on Windows runners), and pytest-timeout's "thread"
+# method (the only one available on Windows) cannot kill a hung asyncio.run,
+# so a stuck call blocks the entire test session indefinitely.
+
+_skip_mcp_on_win = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="MCP-stdio round-trip too slow on Windows; covered by Linux/macOS jobs",
+)
+
 
 async def _mcp_session(coro, cwd=None):
     from mcp.client.session import ClientSession
@@ -338,6 +354,7 @@ async def _mcp_session(coro, cwd=None):
             return await coro(mcp)
 
 
+@_skip_mcp_on_win
 def test_mcp_lists_all_tools():
     async def run(mcp):
         result = await mcp.list_tools()
@@ -349,6 +366,7 @@ def test_mcp_lists_all_tools():
                      "search_library", "load_part", "workflow_hints"}
 
 
+@_skip_mcp_on_win
 def test_mcp_execute_and_measure_round_trip():
     async def run(mcp):
         await mcp.call_tool(
@@ -364,6 +382,7 @@ def test_mcp_execute_and_measure_round_trip():
     assert abs(data["zsize"] - 30) < 0.01
 
 
+@_skip_mcp_on_win
 def test_mcp_render_returns_valid_png():
     async def run(mcp):
         await mcp.call_tool(
@@ -380,6 +399,7 @@ def test_mcp_render_returns_valid_png():
     assert base64.b64decode(data)[:8] == PNG_MAGIC
 
 
+@_skip_mcp_on_win
 def test_mcp_reset_clears_state():
     async def run(mcp):
         await mcp.call_tool(
@@ -395,6 +415,7 @@ def test_mcp_reset_clears_state():
     assert "No shape" in text
 
 
+@_skip_mcp_on_win
 def test_mcp_injection_attempt_returns_error_not_executes():
     """A shell-injection payload through the MCP wire returns an error and does
     not produce side-effects (geometry is still None at the start of the session)."""
@@ -409,6 +430,7 @@ def test_mcp_injection_attempt_returns_error_not_executes():
     assert "not allowed" in text.lower() or "SecurityError" in text
 
 
+@_skip_mcp_on_win
 def test_mcp_snapshot_save_and_restore():
     """save_snapshot / restore_snapshot round-trip through the MCP wire restores geometry."""
     async def run(mcp):
@@ -423,6 +445,7 @@ def test_mcp_snapshot_save_and_restore():
     assert abs(data["xsize"] - 10) < 0.01
 
 
+@_skip_mcp_on_win
 def test_mcp_multi_format_export(tmp_path):
     """export with format='step,stl' reports both paths over the MCP wire."""
     async def run(mcp):
@@ -435,6 +458,7 @@ def test_mcp_multi_format_export(tmp_path):
     assert ".stl" in text
 
 
+@_skip_mcp_on_win
 def test_mcp_volume_and_clearance():
     """volume and clearance round-trip through the MCP wire."""
     async def run(mcp):
@@ -452,6 +476,7 @@ def test_mcp_volume_and_clearance():
     assert abs(json.loads(cl_json)["clearance"] - 5) < 0.1
 
 
+@_skip_mcp_on_win
 def test_mcp_show_and_measure_named_object():
     """show() + per-object measure round-trip through the MCP wire."""
     async def run(mcp):

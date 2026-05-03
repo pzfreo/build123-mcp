@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import pytest
 
@@ -113,6 +114,10 @@ def test_import_build123d_allowed(session):
     assert "Error" not in result
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Session.execute uses SIGALRM for timeout, which is POSIX-only; in-process timeout protection is not available on Windows (the WorkerSession parent-side timeout still works in production).",
+)
 def test_execution_timeout(fast_session):
     result = execute_code(fast_session, "while True: pass")
     assert "timeout" in result.lower() or "time limit" in result.lower()
@@ -132,15 +137,15 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 def test_render_view_iso_returns_png(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    png = render_view(session, "iso")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso")
+    assert "png" in out and out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_all_directions(session):
     execute_code(session, "result = Box(10, 10, 10)")
     for direction in ("top", "front", "side", "iso"):
-        png = render_view(session, direction)
-        assert png[:8] == PNG_MAGIC, f"direction '{direction}' did not return valid PNG"
+        out = render_view(session, direction)
+        assert out["png"][:8] == PNG_MAGIC, f"direction '{direction}' did not return valid PNG"
 
 
 def test_render_view_invalid_direction(session):
@@ -156,8 +161,8 @@ def test_render_view_no_shape_raises(session):
 
 def test_render_view_high_quality_returns_png(session):
     execute_code(session, "result = Cylinder(5, 20)")
-    png = render_view(session, "iso", quality="high")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", quality="high")
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_invalid_quality_raises(session):
@@ -169,14 +174,56 @@ def test_render_view_invalid_quality_raises(session):
 def test_render_view_clip_plane_returns_png(session):
     execute_code(session, "result = Cylinder(5, 20)")
     for plane in ("x", "y", "z"):
-        png = render_view(session, "iso", clip_plane=plane)
-        assert png[:8] == PNG_MAGIC, f"clip_plane '{plane}' did not return valid PNG"
+        out = render_view(session, "iso", clip_plane=plane)
+        assert out["png"][:8] == PNG_MAGIC, f"clip_plane '{plane}' did not return valid PNG"
 
 
 def test_render_view_invalid_clip_plane_raises(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Unknown clip_plane"):
         render_view(session, "iso", clip_plane="w")
+
+
+def test_render_view_svg_format(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    out = render_view(session, "iso", format="svg")
+    assert "svg" in out and "png" not in out
+    assert b"<svg" in out["svg"]
+
+
+def test_render_view_both_format(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    out = render_view(session, "iso", format="both")
+    assert out["png"][:8] == PNG_MAGIC
+    assert b"<svg" in out["svg"]
+
+
+def test_render_view_invalid_format_raises(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Unknown format"):
+        render_view(session, "iso", format="jpeg")
+
+
+def test_render_view_fallback_to_svg_when_vtk_fails(session, monkeypatch):
+    execute_code(session, "result = Box(10, 10, 10)")
+    from build123d_mcp.tools import render as render_mod
+
+    def boom(*_a, **_kw):
+        raise RuntimeError("simulated GL failure")
+
+    monkeypatch.setattr(render_mod, "_do_render_png", boom)
+    out = render_view(session, "iso", format="png")
+    assert "png" not in out
+    assert b"<svg" in out["svg"]
+    assert "fallback" in out and "simulated GL failure" in out["fallback"]
+
+
+def test_render_view_save_to_both_writes_two_files(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "result = Box(10, 10, 10)")
+    render_view(session, "iso", save_to="multi", format="both")
+    assert (tmp_path / "multi.png").exists()
+    assert (tmp_path / "multi.svg").exists()
 
 
 # --- measure ---
@@ -283,6 +330,7 @@ def test_export_path_traversal_rejected(session):
         export_file(session, "../../etc/passwd", "step")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-style absolute path; Windows uses drive-letter paths")
 def test_export_absolute_path_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):
@@ -332,14 +380,14 @@ def test_show_available_after_reset(session):
 
 def test_render_view_multiple_objects(session):
     execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
-    png = render_view(session, "iso")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso")
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_named_subset(session):
     execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
-    png = render_view(session, "iso", "a")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", "a")
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_unknown_object_raises(session):
@@ -458,14 +506,14 @@ def test_show_without_name_defaults_to_shape(session):
 
 def test_render_view_per_object_color(session):
     execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
-    png = render_view(session, "iso", "a:blue,b:red")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", "a:blue,b:red")
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_mixed_color_and_palette(session):
     execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Cylinder(5, 20), 'b')")
-    png = render_view(session, "iso", "a:green,b")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", "a:green,b")
+    assert out["png"][:8] == PNG_MAGIC
 
 
 # --- interference check (issue #13) ---
@@ -526,34 +574,34 @@ def test_measure_topology_named_object(session):
 
 def test_render_view_azimuth_returns_png(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    png = render_view(session, "iso", azimuth=45.0)
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", azimuth=45.0)
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_elevation_returns_png(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    png = render_view(session, "iso", elevation=30.0)
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", elevation=30.0)
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_azimuth_and_elevation_returns_png(session):
     execute_code(session, "result = Cylinder(5, 20)")
-    png = render_view(session, "front", azimuth=20.0, elevation=15.0)
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "front", azimuth=20.0, elevation=15.0)
+    assert out["png"][:8] == PNG_MAGIC
 
 
 # --- render_view clip_at (new) ---
 
 def test_render_view_clip_at_returns_png(session):
     execute_code(session, "result = Cylinder(5, 20)")
-    png = render_view(session, "iso", clip_plane="z", clip_at=5.0)
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", clip_plane="z", clip_at=5.0)
+    assert out["png"][:8] == PNG_MAGIC
 
 
 def test_render_view_clip_at_negative_returns_png(session):
     execute_code(session, "result = Box(20, 20, 20)")
-    png = render_view(session, "iso", clip_plane="x", clip_at=-3.0)
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", clip_plane="x", clip_at=-3.0)
+    assert out["png"][:8] == PNG_MAGIC
 
 
 # --- render_view save_to (new) ---
@@ -561,8 +609,8 @@ def test_render_view_clip_at_negative_returns_png(session):
 def test_render_view_save_to_writes_png(session, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(10, 10, 10)")
-    png = render_view(session, "iso", save_to="out")
-    assert png[:8] == PNG_MAGIC
+    out = render_view(session, "iso", save_to="out")
+    assert out["png"][:8] == PNG_MAGIC
     assert os.path.exists("out.png")
     assert os.path.getsize("out.png") > 0
 
@@ -580,6 +628,7 @@ def test_render_view_save_to_path_traversal_rejected(session):
         render_view(session, "iso", save_to="../../tmp/evil")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-style absolute path; Windows uses drive-letter paths")
 def test_render_view_save_to_absolute_path_rejected(session):
     execute_code(session, "result = Box(10, 10, 10)")
     with pytest.raises(ValueError, match="Path traversal"):
