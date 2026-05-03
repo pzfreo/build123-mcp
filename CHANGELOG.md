@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.4
+
+### Features
+
+- **Auto-diagnostics after `execute()`**: when `current_shape` changes on a successful run, the response now includes a compact diagnostics line (volume, bounding-box dimensions, face/edge/vertex counts). Agents no longer need a separate `measure()` call just to confirm a new shape was created.
+- **Assertion / constraint support**: `AssertionError` raised inside executed code is now surfaced as `"Constraint failed: <message>"` rather than `"Error: AssertionError: ..."`. Scripts can use `assert shape.volume > X, "too small"` as explicit geometry constraints, distinct from accidental bugs.
+- **`diff_snapshot` tool**: new tool comparing two named snapshots (or a snapshot vs current session state). Reports volume delta, topology changes (face/edge/vertex counts), bounding-box changes, and added/removed/changed objects — useful for confirming that a fillet, cut, or other operation changed geometry as expected.
+
+---
+
 ## v0.3.3
 
 ### Bug fixes
