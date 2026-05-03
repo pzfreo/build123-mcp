@@ -40,6 +40,8 @@ Or just use `uvx` — it fetches and runs the package in one step with no prior 
 
 The server runs over stdio — the client launches it as a subprocess using `uvx build123d-mcp`.
 
+> **Note on Python version.** All examples below pass `--python 3.13` to `uvx`. The `cadquery-ocp` dependency does not yet ship wheels for Python 3.14+, so on machines where the default Python is 3.14 (recent macOS Homebrew, for example) `uvx build123d-mcp` will fail to resolve. Pinning to 3.13 makes the bare command work everywhere; uv will auto-download a managed Python 3.13 if you don't already have one.
+
 ### Claude Code
 
 Add to your project's `.mcp.json` (or `~/.claude/mcp.json` for global use):
@@ -49,7 +51,7 @@ Add to your project's `.mcp.json` (or `~/.claude/mcp.json` for global use):
   "mcpServers": {
     "build123d-mcp": {
       "command": "uvx",
-      "args": ["build123d-mcp"]
+      "args": ["--python", "3.13", "build123d-mcp"]
     }
   }
 }
@@ -66,7 +68,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   "mcpServers": {
     "build123d-mcp": {
       "command": "uvx",
-      "args": ["build123d-mcp"]
+      "args": ["--python", "3.13", "build123d-mcp"]
     }
   }
 }
@@ -83,7 +85,7 @@ Open **Settings → MCP** and add a new server entry, or edit `~/.cursor/mcp.jso
   "mcpServers": {
     "build123d-mcp": {
       "command": "uvx",
-      "args": ["build123d-mcp"]
+      "args": ["--python", "3.13", "build123d-mcp"]
     }
   }
 }
@@ -99,7 +101,7 @@ For **Continue** extension, add to `.continue/config.json`:
     {
       "name": "build123d-mcp",
       "command": "uvx",
-      "args": ["build123d-mcp"]
+      "args": ["--python", "3.13", "build123d-mcp"]
     }
   ]
 }
@@ -113,7 +115,7 @@ For **GitHub Copilot** with MCP support, add to `.vscode/mcp.json` in your works
     "build123d-mcp": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["build123d-mcp"]
+      "args": ["--python", "3.13", "build123d-mcp"]
     }
   }
 }

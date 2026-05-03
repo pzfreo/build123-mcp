@@ -143,7 +143,7 @@ MCP client configuration example:
     "mcpServers": {
       "build123d": {
         "command": "uvx",
-        "args": ["build123d-mcp", "--library", "/path/to/parts"]
+        "args": ["--python", "3.13", "build123d-mcp", "--library", "/path/to/parts"]
       }
     }
   }
