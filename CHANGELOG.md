@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.3.0 (unreleased)
+## v0.3.1
+
+### Features
+
+- Add `--version` CLI flag (`build123d-mcp --version`) using `importlib.metadata`.
+
+---
+
+## v0.3.0
 
 ### Security
 
