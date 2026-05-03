@@ -96,6 +96,12 @@ def restore_snapshot(name: str) -> str:
 
 
 @mcp.tool()
+def diff_snapshot(snapshot_a: str, snapshot_b: str = "") -> str:
+    """Compare two snapshots by geometry metrics (volume, topology, bounding box). snapshot_b defaults to current session state if omitted. Reports volume delta, topology changes, and added/removed/changed objects — useful for confirming that a fillet, cut, or other operation changed geometry as expected."""
+    return _session.diff_snapshot(snapshot_a, snapshot_b)
+
+
+@mcp.tool()
 def reset() -> str:
     """Clear the current session back to empty state, including all snapshots."""
     return _session.reset()

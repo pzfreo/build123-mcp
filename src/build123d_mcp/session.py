@@ -37,6 +37,22 @@ class Session:
 
         self.namespace["show"] = show
 
+    def _quick_diagnostics(self, shape) -> str:
+        try:
+            bb = shape.bounding_box()
+            vol = shape.volume
+            faces = len(shape.faces())
+            edges = len(shape.edges())
+            verts = len(shape.vertices())
+            return (
+                f"--- current_shape ---\n"
+                f"volume: {vol:.4g} mm³  |  "
+                f"bbox: {bb.size.X:.4g}×{bb.size.Y:.4g}×{bb.size.Z:.4g} mm  |  "
+                f"{faces}f {edges}e {verts}v"
+            )
+        except Exception:
+            return ""
+
     def execute(self, code: str) -> str:
         # Layer 1: AST check before anything runs
         try:
@@ -50,6 +66,7 @@ class Session:
             return f"Error: SyntaxError: {e}"
 
         keys_before = {k for k in self.namespace if k not in ("__builtins__", "show")}
+        shape_before = self.current_shape
 
         buf = io.StringIO()
         exc: Exception | None = None
@@ -75,6 +92,8 @@ class Session:
                 exec(compiled, self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
             return f"Error: ExecutionTimeout: {e}"
+        except AssertionError as e:
+            return f"Constraint failed: {e}" if str(e) else "Constraint failed"
         except Exception as e:
             exc = e
         finally:
@@ -88,7 +107,12 @@ class Session:
         if exc is not None:
             return f"Error: {type(exc).__name__}: {exc}"
 
-        return buf.getvalue() or "OK"
+        output = buf.getvalue() or "OK"
+        if self.current_shape is not None and self.current_shape is not shape_before:
+            diag = self._quick_diagnostics(self.current_shape)
+            if diag:
+                output = output.rstrip("\n") + "\n" + diag
+        return output
 
     def _update_current_shape(self, new_keys: set[str]) -> None:
         try:
