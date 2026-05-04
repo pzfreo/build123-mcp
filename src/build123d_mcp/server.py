@@ -154,7 +154,7 @@ def repair_hints(error_text: str) -> str:
 
 @mcp.tool()
 def last_error() -> str:
-    """Return details of the last failed execute() call: exception type, message, line number within the submitted code, and a 5-line excerpt around the failing line. Returns {\"error\": null} if the last execute() succeeded or no execute() has failed yet. Call this immediately after an execute() error to get the exact failing line — much faster than re-reading the submitted code."""
+    """Return details of the last failed execute() call: exception type, message, and (for runtime and syntax errors) line number and a 5-line excerpt around the failing line. Security errors include a message but no line/excerpt. Returns {\"error\": null} if the last execute() succeeded or no execute() has failed yet. Call this immediately after an execute() error to get the exact failing line — much faster than re-reading the submitted code."""
     return _session.last_error()
 
 
@@ -246,6 +246,10 @@ Available tools:
   save_snapshot     Save a named geometric checkpoint
   restore_snapshot  Restore geometry from a named checkpoint
   diff_snapshot     Compare two snapshots; format="json" for structured output
+  last_error        Details of the last failed execute() (type, message, line, excerpt)
+  validate_code     Check code for syntax/security errors before executing
+  shape_compare     Compare two named shapes by geometry metrics
+  repair_hints      Get fix suggestions for a given execute() error message
   version           Return the server version string
   workflow_hints    Return guidance on using these tools effectively
   reset             Clear the session (namespace, shapes, snapshots)
