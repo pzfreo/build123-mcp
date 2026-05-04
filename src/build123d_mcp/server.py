@@ -1,8 +1,9 @@
+import base64
 import os
 import tempfile
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import TextContent
+from mcp.types import ImageContent, TextContent
 
 from build123d_mcp.worker import WorkerSession
 
@@ -27,17 +28,26 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
     )
 
     contents: list = []
-    for key, suffix in (("png", ".png"), ("svg", ".svg")):
+    for key, suffix, mime in (("png", ".png", "image/png"), ("svg", ".svg", "image/svg+xml")):
         if key in result:
+            data = result[key]
             fd, path = tempfile.mkstemp(suffix=suffix, prefix="build123d_")
             os.close(fd)
             with open(path, "wb") as f:
-                f.write(result[key])
+                f.write(data)
+            contents.append(ImageContent(
+                type="image",
+                data=base64.b64encode(data).decode(),
+                mimeType=mime,
+            ))
             contents.append(TextContent(type="text", text=f"[SEND: {path}]"))
     if result.get("fallback"):
         contents.append(TextContent(type="text", text=result["fallback"]))
     if result.get("png_error"):
         contents.append(TextContent(type="text", text=f"PNG render failed: {result['png_error']}"))
+    if result.get("png_warnings"):
+        for w in result["png_warnings"]:
+            contents.append(TextContent(type="text", text=f"Warning: {w}"))
     return contents
 
 
@@ -49,7 +59,7 @@ def measure(query: str = "bounding_box", object_name: str = "", object_name2: st
 
 @mcp.tool()
 def export(filename: str, format: str = "step", object_name: str = "") -> str:
-    """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show() (default: current shape)."""
+    """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show(), '*' to export all named shapes as a combined assembly (default: current shape)."""
     return _session.export_file(filename, format, object_name)
 
 
@@ -191,7 +201,7 @@ MCP client configuration example:
     "mcpServers": {
       "build123d": {
         "command": "uvx",
-        "args": ["--python", "3.13", "build123d-mcp", "--library", "/path/to/parts"]
+        "args": ["--python", "3.12", "build123d-mcp", "--library", "/path/to/parts"]
       }
     }
   }

@@ -108,10 +108,9 @@ def _camera_direction(direction: str) -> tuple[tuple[float, float, float], tuple
     return (1.0, 1.0, 1.0), (0.0, 0.0, 1.0)  # iso
 
 
-def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation) -> bytes:
+def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation) -> tuple[bytes, list[str]]:
     import tempfile
     import vtk
-    from build123d import Mesher
 
     _ensure_display()
 
@@ -123,77 +122,98 @@ def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevat
     render_window.SetSize(800, 600)
     render_window.AddRenderer(renderer)
 
+    failed: list[str] = []
+    actor_count = 0
+
+    for i, (name, shape, obj_color) in enumerate(shapes):
+        try:
+            verts, tris = shape.tessellate(
+                tess["linear_deflection"], tess["angular_deflection"]
+            )
+        except Exception as exc:
+            failed.append(f"{name}: {exc}")
+            continue
+
+        points = vtk.vtkPoints()
+        for v in verts:
+            points.InsertNextPoint(v.X, v.Y, v.Z)
+
+        cells = vtk.vtkCellArray()
+        for tri in tris:
+            cells.InsertNextCell(3)
+            cells.InsertCellPoint(tri[0])
+            cells.InsertCellPoint(tri[1])
+            cells.InsertCellPoint(tri[2])
+
+        poly = vtk.vtkPolyData()
+        poly.SetPoints(points)
+        poly.SetPolys(cells)
+
+        if clip_plane:
+            if clip_at is not None:
+                origin = {"x": (clip_at, 0, 0), "y": (0, clip_at, 0), "z": (0, 0, clip_at)}[clip_plane]
+            else:
+                bounds = poly.GetBounds()  # xmin, xmax, ymin, ymax, zmin, zmax
+                cx = (bounds[0] + bounds[1]) / 2
+                cy = (bounds[2] + bounds[3]) / 2
+                cz = (bounds[4] + bounds[5]) / 2
+                origin = {"x": (cx, 0, 0), "y": (0, cy, 0), "z": (0, 0, cz)}[clip_plane]
+            normal = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}[clip_plane]
+
+            plane = vtk.vtkPlane()
+            plane.SetOrigin(*origin)
+            plane.SetNormal(*normal)
+
+            clipper = vtk.vtkClipPolyData()
+            clipper.SetInputData(poly)
+            clipper.SetClipFunction(plane)
+            clipper.SetInsideOut(False)
+            clipper.Update()
+            poly = clipper.GetOutput()
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(poly)
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+
+        r, g, b = _color_to_rgb(obj_color if obj_color else _PALETTE[i % len(_PALETTE)])
+        prop = actor.GetProperty()
+        prop.SetColor(r, g, b)
+        prop.SetAmbient(0.3)
+        prop.SetDiffuse(0.7)
+        prop.SetSpecular(0.2)
+        prop.SetInterpolationToPhong()  # smooth shading
+
+        renderer.AddActor(actor)
+        actor_count += 1
+
+    if actor_count == 0:
+        msg = "All shapes failed to tessellate: " + "; ".join(failed) if failed else "No geometry to render"
+        raise RuntimeError(msg)
+
+    # Camera setup
+    camera = renderer.GetActiveCamera()
+    camera.SetParallelProjection(False)
+    pos, up = _camera_direction(direction)
+    camera.SetPosition(*pos)
+    camera.SetFocalPoint(0.0, 0.0, 0.0)
+    camera.SetViewUp(*up)
+    renderer.ResetCamera()
+
+    if azimuth != 0.0 or elevation != 0.0:
+        camera.Azimuth(azimuth)
+        camera.Elevation(elevation)
+        camera.OrthogonalizeViewUp()
+        renderer.ResetCameraClippingRange()
+
+    render_window.Render()
+
+    w2i = vtk.vtkWindowToImageFilter()
+    w2i.SetInput(render_window)
+    w2i.Update()
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        for i, (_name, shape, obj_color) in enumerate(shapes):
-            stl_path = os.path.join(tmpdir, f"shape_{i}.stl")
-            mesher = Mesher()
-            mesher.add_shape(shape, **tess)  # type: ignore[arg-type]
-            mesher.write(stl_path)
-
-            reader = vtk.vtkSTLReader()
-            reader.SetFileName(stl_path)
-            reader.Update()
-            poly = reader.GetOutput()
-
-            if clip_plane:
-                if clip_at is not None:
-                    origin = {"x": (clip_at, 0, 0), "y": (0, clip_at, 0), "z": (0, 0, clip_at)}[clip_plane]
-                else:
-                    bounds = poly.GetBounds()  # xmin, xmax, ymin, ymax, zmin, zmax
-                    cx = (bounds[0] + bounds[1]) / 2
-                    cy = (bounds[2] + bounds[3]) / 2
-                    cz = (bounds[4] + bounds[5]) / 2
-                    origin = {"x": (cx, 0, 0), "y": (0, cy, 0), "z": (0, 0, cz)}[clip_plane]
-                normal = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}[clip_plane]
-
-                plane = vtk.vtkPlane()
-                plane.SetOrigin(*origin)
-                plane.SetNormal(*normal)
-
-                clipper = vtk.vtkClipPolyData()
-                clipper.SetInputData(poly)
-                clipper.SetClipFunction(plane)
-                clipper.SetInsideOut(False)
-                clipper.Update()
-                poly = clipper.GetOutput()
-
-            mapper = vtk.vtkPolyDataMapper()
-            mapper.SetInputData(poly)
-
-            actor = vtk.vtkActor()
-            actor.SetMapper(mapper)
-
-            r, g, b = _color_to_rgb(obj_color if obj_color else _PALETTE[i % len(_PALETTE)])
-            prop = actor.GetProperty()
-            prop.SetColor(r, g, b)
-            prop.SetAmbient(0.3)
-            prop.SetDiffuse(0.7)
-            prop.SetSpecular(0.2)
-            prop.SetInterpolationToPhong()  # smooth shading
-
-            renderer.AddActor(actor)
-
-        # Camera setup
-        camera = renderer.GetActiveCamera()
-        camera.SetParallelProjection(False)
-        pos, up = _camera_direction(direction)
-        camera.SetPosition(*pos)
-        camera.SetFocalPoint(0.0, 0.0, 0.0)
-        camera.SetViewUp(*up)
-        renderer.ResetCamera()
-
-        if azimuth != 0.0 or elevation != 0.0:
-            camera.Azimuth(azimuth)
-            camera.Elevation(elevation)
-            camera.OrthogonalizeViewUp()
-            renderer.ResetCameraClippingRange()
-
-        render_window.Render()
-
-        w2i = vtk.vtkWindowToImageFilter()
-        w2i.SetInput(render_window)
-        w2i.Update()
-
         png_path = os.path.join(tmpdir, "render.png")
         writer = vtk.vtkPNGWriter()
         writer.SetFileName(png_path)
@@ -201,7 +221,7 @@ def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevat
         writer.Write()
 
         with open(png_path, "rb") as f:
-            return f.read()
+            return f.read(), failed
 
 
 def _viewport_origin_for(direction: str, shapes, azimuth: float, elevation: float):
@@ -365,9 +385,14 @@ def render_view(
 
     if format in ("png", "both"):
         try:
-            result["png"] = _do_render_png(
+            png_bytes, png_failed = _do_render_png(
                 shapes, tess, direction, clip_plane, clip_at, azimuth, elevation,
             )
+            result["png"] = png_bytes
+            if png_failed:
+                result["png_warnings"] = [
+                    f"Skipped shapes (tessellation failed): {', '.join(png_failed)}"
+                ]
         except Exception as exc:
             if format == "png":
                 # Auto-fallback: produce SVG so the AI still gets a visual.

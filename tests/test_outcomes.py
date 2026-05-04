@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import os
+import struct
 import sys
 
 import pytest
@@ -240,6 +241,45 @@ def test_export_named_object_independent_of_current_shape(session, tmp_path, mon
     assert os.path.getsize("big.step") > 1000
 
 
+def test_export_assembly_step_contains_all_parts(session, tmp_path, monkeypatch):
+    """object_name='*' exports a compound of all named shapes; STEP is larger than any single part."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(10, 10, 10), 'box')\nshow(Cylinder(5, 20), 'cyl')")
+    export_file(session, "box", "step", "box")
+    export_file(session, "cyl", "step", "cyl")
+    export_file(session, "assembly", "step", "*")
+    box_size = os.path.getsize("box.step")
+    cyl_size = os.path.getsize("cyl.step")
+    asm_size = os.path.getsize("assembly.step")
+    assert asm_size > box_size
+    assert asm_size > cyl_size
+
+
+def test_export_assembly_stl_is_valid_binary(session, tmp_path, monkeypatch):
+    """object_name='*' produces a valid binary STL whose triangle count matches the header."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(10, 10, 10), 'a')\nshow(Box(5, 5, 5), 'b')")
+    export_file(session, "assembly", "stl", "*")
+    with open("assembly.stl", "rb") as f:
+        data = f.read()
+    # Binary STL: 80-byte header + 4-byte count + count * 50 bytes
+    tri_count = struct.unpack_from("<I", data, 80)[0]
+    assert tri_count > 0
+    assert len(data) == 84 + tri_count * 50
+
+
+def test_export_stl_avoids_mesher_for_complex_shape(session, tmp_path, monkeypatch):
+    """STL export of a boolean-subtracted shape uses tessellate(), not Mesher, so it doesn't
+    raise '3mf mesh is invalid' for shapes that pass OCCT meshing but fail Lib3MF validation."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(20, 20, 20) - Cylinder(5, 22), 'hollow')")
+    export_file(session, "hollow", "stl", "hollow")
+    with open("hollow.stl", "rb") as f:
+        data = f.read()
+    tri_count = struct.unpack_from("<I", data, 80)[0]
+    assert tri_count > 0
+
+
 def test_reset_clears_show_registry(session):
     """After reset, previously registered objects are gone."""
     execute_code(session, "show(Box(10, 10, 10), 'part')")
@@ -383,19 +423,27 @@ def test_mcp_execute_and_measure_round_trip():
 
 
 @_skip_mcp_on_win
-def test_mcp_render_returns_file_path():
+def test_mcp_render_returns_image_and_file_path():
     async def run(mcp):
         await mcp.call_tool(
             "execute",
             {"code": "from build123d import *\nresult = Box(10, 10, 10)"},
         )
         result = await mcp.call_tool("render_view", {"direction": "iso"})
-        c = result.content[0]
-        return c.type, c.text
+        img = result.content[0]
+        path_item = result.content[1]
+        return img.type, img.data, img.mimeType, path_item.type, path_item.text
 
-    content_type, text = asyncio.run(_mcp_session(run))
-    assert content_type == "text"
-    path = text.removeprefix("[SEND: ").removesuffix("]")
+    img_type, img_data, mime, path_type, path_text = asyncio.run(_mcp_session(run))
+    # ImageContent with base64 PNG
+    assert img_type == "image"
+    assert mime == "image/png"
+    import base64
+    png_bytes = base64.b64decode(img_data)
+    assert png_bytes[:8] == PNG_MAGIC
+    # TextContent with file path for [SEND:] delivery
+    assert path_type == "text"
+    path = path_text.removeprefix("[SEND: ").removesuffix("]")
     assert path.endswith(".png")
     assert os.path.exists(path)
     with open(path, "rb") as f:
