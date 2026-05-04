@@ -6,10 +6,12 @@ _SKIP = {"__builtins__", "show"}
 
 
 def _namespace_summary(namespace: dict) -> dict:
+    _shape_cls: type | None = None
     try:
         from build123d import Shape
+        _shape_cls = Shape
     except ImportError:
-        Shape = None
+        pass
 
     result = {}
     for name, val in namespace.items():
@@ -17,9 +19,9 @@ def _namespace_summary(namespace: dict) -> dict:
             continue
         try:
             typ = type(val).__name__
-            if Shape is not None and isinstance(val, Shape):
+            if _shape_cls is not None and isinstance(val, _shape_cls):
                 try:
-                    result[name] = {"type": typ, "volume": round(val.volume, 4)}
+                    result[name] = {"type": typ, "volume": round(val.volume, 4)}  # type: ignore[attr-defined]
                 except Exception:
                     result[name] = {"type": typ}
             elif isinstance(val, (list, tuple)):
