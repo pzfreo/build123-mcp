@@ -133,6 +133,26 @@ def reset() -> str:
 
 
 @mcp.tool()
+def validate_code(code: str) -> str:
+    """Check build123d code for syntax errors, blocked imports/calls, and common omissions before executing. Returns {syntax, blocked, warnings, ok}. blocked items prevent execution; warnings are advisory (e.g. no build123d import in this snippet, no result/show() call). Use this before a long generated script to catch obvious problems without burning a session execute()."""
+    from build123d_mcp.tools.validate_code import validate_code as _validate_code
+    return _validate_code(code)
+
+
+@mcp.tool()
+def shape_compare(object_a: str, object_b: str) -> str:
+    """Compare two named shapes (from show()) by geometry metrics: volume delta, bbox delta, topology delta (faces/edges/vertices), and center offset. Useful when you have an intended design and a reference/test shape and want to verify they match — or to quantify how a modification changed the geometry."""
+    return _session.shape_compare(object_a, object_b)
+
+
+@mcp.tool()
+def repair_hints(error_text: str) -> str:
+    """Given an error message from execute(), return targeted fix suggestions for common build123d mistakes: wrong Location syntax, missing .part, CadQuery idioms, blocked imports, degenerate boolean results, fillet edge selection, and more. Pass the full error string from execute() or last_error()."""
+    from build123d_mcp.tools.repair_hints import repair_hints as _repair_hints
+    return _repair_hints(error_text)
+
+
+@mcp.tool()
 def last_error() -> str:
     """Return details of the last failed execute() call: exception type, message, line number within the submitted code, and a 5-line excerpt around the failing line. Returns {\"error\": null} if the last execute() succeeded or no execute() has failed yet. Call this immediately after an execute() error to get the exact failing line — much faster than re-reading the submitted code."""
     return _session.last_error()
