@@ -1,5 +1,10 @@
 # build123d-mcp
 
+[![PyPI version](https://img.shields.io/pypi/v/build123d-mcp)](https://pypi.org/project/build123d-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/build123d-mcp)](https://pypi.org/project/build123d-mcp/)
+[![CI](https://github.com/pzfreo/build123d-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pzfreo/build123d-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 An MCP (Model Context Protocol) server that exposes build123d CAD operations as tools, enabling AI assistants to build, inspect, and iterate on 3D geometry interactively.
 
 ## Why
@@ -9,10 +14,15 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 ## Tools
 
 - `execute` — run build123d Python code in a persistent session; use `show(shape, name)` to register named parts
-- `render_view` — render one or more shapes as PNG; supports assembly compositing, high-quality tessellation, and cross-section clip planes
-- `measure` — query bounding box, volume, surface area, minimum wall thickness, or clearance between two named bodies
+- `render_view` — render one or more shapes as PNG or SVG; supports assembly compositing, high-quality tessellation, and cross-section clip planes
+- `measure` — query bounding box, volume, surface area, topology, minimum wall thickness, or clearance between two named bodies
 - `export` — export as STEP, STL, or both in one call; targets a named object or the current shape
-- `save_snapshot` / `restore_snapshot` — checkpoint and recover geometric state without re-running prior code
+- `session_state` — full JSON snapshot of active shapes, named objects, and snapshot names
+- `health_check` — verify VTK/SVG/STEP/STL dependencies work end-to-end before starting work
+- `save_snapshot` / `restore_snapshot` / `diff_snapshot` — checkpoint, recover, and compare geometric state
+- `interference` — check intersection volume between two named shapes
+- `list_objects` — list all named shapes with geometry stats
+- `version` — return the server version
 - `reset` — clear the session back to empty state
 
 See [llms.md](llms.md) for full tool reference and usage patterns.
