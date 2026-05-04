@@ -1,7 +1,8 @@
-import base64
+import os
+import tempfile
 
-from mcp.server.fastmcp import FastMCP, Image
-from mcp.types import ImageContent, TextContent
+from mcp.server.fastmcp import FastMCP
+from mcp.types import TextContent
 
 from build123d_mcp.worker import WorkerSession
 
@@ -26,11 +27,13 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
     )
 
     contents: list = []
-    if "png" in result:
-        contents.append(Image(data=result["png"], format="png"))
-    if "svg" in result:
-        svg_b64 = base64.b64encode(result["svg"]).decode()
-        contents.append(ImageContent(type="image", data=svg_b64, mimeType="image/svg+xml"))
+    for key, suffix in (("png", ".png"), ("svg", ".svg")):
+        if key in result:
+            fd, path = tempfile.mkstemp(suffix=suffix, prefix="build123d_")
+            os.close(fd)
+            with open(path, "wb") as f:
+                f.write(result[key])
+            contents.append(TextContent(type="text", text=f"[SEND: {path}]"))
     if result.get("fallback"):
         contents.append(TextContent(type="text", text=result["fallback"]))
     if result.get("png_error"):

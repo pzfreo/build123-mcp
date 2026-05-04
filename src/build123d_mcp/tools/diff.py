@@ -28,6 +28,7 @@ def _fmt_shape_diff(a: dict | None, b: dict | None, label: str) -> str | None:
     if a is None and b is None:
         return None
     if a is None:
+        assert b is not None
         return f"  {label}: (none) → volume={b['volume']} mm³, {b['faces']}f {b['edges']}e {b['vertices']}v"
     if b is None:
         return f"  {label}: volume={a['volume']} mm³ → (none)"

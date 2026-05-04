@@ -383,7 +383,7 @@ def test_mcp_execute_and_measure_round_trip():
 
 
 @_skip_mcp_on_win
-def test_mcp_render_returns_valid_png():
+def test_mcp_render_returns_file_path():
     async def run(mcp):
         await mcp.call_tool(
             "execute",
@@ -391,12 +391,15 @@ def test_mcp_render_returns_valid_png():
         )
         result = await mcp.call_tool("render_view", {"direction": "iso"})
         c = result.content[0]
-        return c.type, c.mimeType, c.data
+        return c.type, c.text
 
-    content_type, mime_type, data = asyncio.run(_mcp_session(run))
-    assert content_type == "image"
-    assert mime_type == "image/png"
-    assert base64.b64decode(data)[:8] == PNG_MAGIC
+    content_type, text = asyncio.run(_mcp_session(run))
+    assert content_type == "text"
+    path = text.removeprefix("[SEND: ").removesuffix("]")
+    assert path.endswith(".png")
+    assert os.path.exists(path)
+    with open(path, "rb") as f:
+        assert f.read(8) == PNG_MAGIC
 
 
 @_skip_mcp_on_win
