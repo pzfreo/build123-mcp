@@ -24,10 +24,13 @@ class Session:
         self.namespace["__builtins__"] = make_restricted_builtins()
         objects = self.objects
 
+        session_ref = self
+
         def show(shape: Any, name: str | None = None) -> None:
             if name is None:
                 name = "shape"
             objects[name] = shape
+            session_ref.current_shape = shape
             try:
                 vol = shape.volume
                 faces = len(shape.faces())
@@ -101,11 +104,11 @@ class Session:
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, _old_handler)
 
-        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
-        self._update_current_shape(new_keys)
-
         if exc is not None:
             return f"Error: {type(exc).__name__}: {exc}"
+
+        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
+        self._update_current_shape(new_keys)
 
         output = buf.getvalue() or "OK"
         if self.current_shape is not None and self.current_shape is not shape_before:

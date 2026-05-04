@@ -154,6 +154,19 @@ def test_blocked_import_does_not_corrupt_shape(session):
     assert session.current_shape is shape_before
 
 
+def test_runtime_error_does_not_update_current_shape(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    shape_before = session.current_shape
+    execute_code(session, "bad = Box(5, 5, 5); raise ValueError('oops')")
+    assert session.current_shape is shape_before
+
+
+def test_show_sets_current_shape(session):
+    execute_code(session, "show(Box(10, 10, 10), 'part')")
+    assert session.current_shape is not None
+    assert session.objects.get("part") is session.current_shape
+
+
 # --- render_view ---
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
