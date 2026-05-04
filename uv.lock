@@ -57,6 +57,19 @@ wheels = [
 ]
 
 [[package]]
+name = "bd-warehouse"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "build123d" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ff/67/60edfe8be58d2a76b179a013be714d7e88006b064a71964d9dc912537bb2/bd_warehouse-0.2.0.tar.gz", hash = "sha256:9f2efe3aba208d25df87f48d4c5a387768c1e5111c20d8250f81c47c83562857", size = 7495756, upload-time = "2026-02-19T16:39:40.516Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/bb/207f7d92a33fff90530e044d3ac4227ff5cafdd22e142fdd3569919b8df1/bd_warehouse-0.2.0-py3-none-any.whl", hash = "sha256:1fe66a491a81dd131a864677bab15257c9b6e32412cd5a5ab85c2c24b3c3617b", size = 113580, upload-time = "2026-02-19T16:39:38.942Z" },
+]
+
+[[package]]
 name = "build123d"
 version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -89,6 +102,7 @@ name = "build123d-mcp"
 version = "0.3.8"
 source = { editable = "." }
 dependencies = [
+    { name = "bd-warehouse" },
     { name = "build123d" },
     { name = "mcp" },
     { name = "pyvista" },
@@ -104,6 +118,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bd-warehouse" },
     { name = "build123d" },
     { name = "mcp" },
     { name = "pyvista" },

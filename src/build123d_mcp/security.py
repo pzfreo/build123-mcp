@@ -27,15 +27,46 @@ EXEC_TIMEOUT_SECONDS = 30
 # Modules user code may import. build123d's own internal imports are
 # unaffected — they run through the real import system, not this namespace.
 IMPORT_ALLOWLIST = frozenset({
+    # CAD libraries
     "build123d",
+    "bd_warehouse",
+    # Numeric / math
     "math",
     "numpy",
-    "typing",
+    "decimal",
+    "fractions",
+    "statistics",
+    "numbers",
+    "random",
+    # Data structures / utilities
     "collections",
     "itertools",
     "functools",
     "copy",
+    "operator",
+    "struct",
+    # Type system
+    "typing",
+    "abc",
+    "dataclasses",
+    "enum",
+    # String / text
+    "re",
+    "string",
+    "textwrap",
+    "pprint",
+    # Serialisation (in-memory only — no I/O)
+    "json",
+    "base64",
+    "hashlib",
+    # Misc stdlib
+    "io",
+    "warnings",
+    "contextlib",
 })
+
+# When True, import checks are skipped entirely.  Set via --allow-all-imports.
+ALLOW_ALL_IMPORTS: bool = False
 
 # Builtins that are dangerous even without an import.
 _BLOCKED_BUILTINS = frozenset({
@@ -65,6 +96,14 @@ def check_ast(code: str) -> None:
     try:
         tree = ast.parse(code)
     except SyntaxError:
+        return
+
+    if ALLOW_ALL_IMPORTS:
+        # Still block dangerous calls even in unrestricted mode.
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in _BLOCKED_CALL_NAMES:
+                    raise ValueError(f"Call to '{node.func.id}' is not allowed.")
         return
 
     for node in ast.walk(tree):
@@ -117,6 +156,10 @@ def make_restricted_builtins() -> dict[str, Any]:
         safe.pop(name, None)
 
     _original_import = safe["__import__"]
+
+    if ALLOW_ALL_IMPORTS:
+        safe["__import__"] = _original_import
+        return safe
 
     def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
         root = name.split(".")[0]

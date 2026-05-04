@@ -273,14 +273,24 @@ Part library file format (Python, any .py file under --library path):
         default=os.environ.get("BUILD123D_PART_LIBRARY", ""),
         help="Path to part library directory (overrides BUILD123D_PART_LIBRARY env var)",
     )
+    parser.add_argument(
+        "--allow-all-imports", action="store_true",
+        default=os.environ.get("BUILD123D_ALLOW_ALL_IMPORTS", "").lower() in ("1", "true", "yes"),
+        help="Disable the import allowlist — any Python module can be imported. "
+             "Use only in trusted environments. Overrides BUILD123D_ALLOW_ALL_IMPORTS env var.",
+    )
     args = parser.parse_args()
 
     if args.library and not os.path.isdir(args.library):
         parser.error(f"Library path is not a directory: {args.library}")
 
+    if args.allow_all_imports:
+        import build123d_mcp.security as _sec
+        _sec.ALLOW_ALL_IMPORTS = True
+
     global _session, _has_library
     _has_library = bool(args.library)
-    _session = WorkerSession(library_path=args.library)
+    _session = WorkerSession(library_path=args.library, allow_all_imports=args.allow_all_imports)
 
     mcp.run()
 
