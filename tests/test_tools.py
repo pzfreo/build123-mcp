@@ -255,6 +255,7 @@ def test_render_view_fallback_to_svg_when_vtk_fails(session, monkeypatch):
     assert "png" not in out
     assert b"<svg" in out["svg"]
     assert "fallback" in out and "simulated GL failure" in out["fallback"]
+    assert out.get("format") == "svg"
 
 
 def test_render_view_save_to_both_writes_two_files(session, tmp_path, monkeypatch):
@@ -500,12 +501,20 @@ def test_export_unknown_object_raises(session):
 
 def test_save_and_restore_snapshot(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    shape_before = session.current_shape
+    vol_before = session.current_shape.volume
     session.save_snapshot("v1")
     execute_code(session, "result = Box(99, 99, 99)")
-    assert session.current_shape is not shape_before
+    assert session.current_shape.volume != vol_before
     session.restore_snapshot("v1")
-    assert session.current_shape is shape_before
+    assert abs(session.current_shape.volume - vol_before) < 0.01
+
+
+def test_snapshot_deep_copies_shape(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    shape_ref = session.current_shape
+    session.save_snapshot("v1")
+    # snapshot must hold a copy, not the original reference
+    assert session.snapshots["v1"]["current_shape"] is not shape_ref
 
 
 def test_snapshot_captures_objects_registry(session):
