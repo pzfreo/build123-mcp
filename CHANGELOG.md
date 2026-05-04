@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.5
+
+### Features
+
+- **`session_state` tool**: returns a structured JSON snapshot of the full session — `current_shape` metrics, all named objects with geometry stats, and snapshot names. Useful for orienting at session start or after a restore.
+- **`health_check` tool**: verifies PNG render (VTK), SVG render (HLR), STEP export, and STL export with a trivial shape. Returns per-capability `ok`/`error` status. Run at session start if you suspect a missing dependency.
+- **`version` MCP tool**: returns the server version string from inside the session, complementing the existing `--version` CLI flag.
+- **`diff_snapshot` JSON mode**: passing `format="json"` returns structured diff output (`{"a": {...}, "b": {...}}`) for programmatic consumption by agents.
+- **Outcome test suite**: added 21 usage-focused outcome tests covering the full API surface (all MCP tools exercised end-to-end).
+- **README badges**: added PyPI version, Python version, CI status, and MIT license badges.
+- **Updated `llms.md`**: full rewrite covering all tools with inputs, outputs, and examples; updated recommended 12-step workflow.
+
+### Bug fixes
+
+- **`show()` now sets `current_shape`**: calling `show(shape, "name")` now also updates `current_shape`, so subsequent `measure()`/`render_view()`/`export()` calls work immediately without an explicit `result` assignment.
+- **Failed `execute()` no longer mutates `current_shape`**: if code raises an exception, the previous `current_shape` is preserved. Failed code cannot silently advance session state.
+- **`exec_timeout` wired through to worker**: `WorkerSession(exec_timeout=N)` now correctly passes the timeout to the child process (previously silently used the default 30 s).
+- **`requires-python` capped at `<3.13`**: `vtk` and `cadquery-ocp` have no wheels for Python 3.13+; the cap now prevents confusing resolver errors.
+
+---
+
 ## v0.3.4
 
 ### Features
