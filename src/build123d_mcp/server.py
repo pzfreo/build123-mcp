@@ -123,41 +123,54 @@ def reset() -> str:
 
 
 @mcp.tool()
+def version() -> str:
+    """Return the build123d-mcp server version."""
+    from importlib.metadata import version as _version
+    return _version("build123d-mcp")
+
+
+@mcp.tool()
 def workflow_hints() -> str:
     """Return guidance on how to use these tools effectively. Call this at the start of a session or whenever unsure which tool to reach for."""
     return """\
 BUILD123D-MCP WORKFLOW GUIDE
 
-1. MEASURE BEFORE YOU LOOK
+1. ORIENT FIRST
+   At the start of a session, call session_state() to see what geometry, objects, and
+   snapshots are already active. Call health_check() if you suspect a missing dependency
+   (VTK, display, STEP export). Call version() to confirm the server version.
+
+2. MEASURE BEFORE YOU LOOK
    After building or modifying geometry, verify with measure() before calling render_view.
    Numbers are unambiguous; renders can look correct even when the geometry is wrong.
    Recommended order: execute → measure → render_view (if you need to see it).
 
-2. VERIFY BOOLEAN OPERATIONS WITH TOPOLOGY
+3. VERIFY BOOLEAN OPERATIONS WITH TOPOLOGY
    After any cut, union, or intersection, call measure(topology) on the result.
    A successful boolean changes face/edge/vertex counts; a failed one leaves them unchanged.
    measure(volume) confirms the magnitude of the change.
 
-3. MEASURE THE OBJECT IN QUESTION — NOT A PROXY
+4. MEASURE THE OBJECT IN QUESTION — NOT A PROXY
    When debugging, call measure() on the actual disputed object.
    Testing an isolated reconstruction and using that as proof of the full assembly is a
    common mistake — the two may differ in ways that matter.
 
-4. NAME AND AUDIT YOUR SHAPES
-   Use show(shape, "name") after creating important geometry.
+5. NAME AND AUDIT YOUR SHAPES
+   Use show(shape, "name") after creating important geometry — it also sets current_shape.
    The execute() output immediately confirms name, volume, and face count.
-   Call list_objects() any time to see all registered shapes and their geometry.
+   Call session_state() for a full JSON view of all active shapes, objects, and snapshots.
 
-5. CHECKPOINT BEFORE EXPERIMENTS
+6. CHECKPOINT BEFORE EXPERIMENTS
    Call save_snapshot("name") before any operation you might want to undo.
    Snapshots are instant. restore_snapshot("name") reverts geometry without re-running code.
+   Use diff_snapshot("name") to see what changed; pass format="json" for structured output.
 
-6. CROSS-SECTIONS FOR INTERNAL GEOMETRY
+7. CROSS-SECTIONS FOR INTERNAL GEOMETRY
    render_view with clip_plane + clip_at reveals interior features.
    Use clip_at to position the cut at a specific world coordinate, not just the midpoint.
    Combine with measure(topology) on the unclipped shape to confirm what you see.
 
-7. PART LIBRARY
+8. PART LIBRARY
    search_library("keyword") returns full parameter specs.
    Call load_part("name", '{"param": value}') immediately — no second lookup needed.
    Unspecified parameters use the defaults shown in search results.
@@ -190,10 +203,14 @@ Available tools:
   export            Export model to STEP or STL
   interference      Check intersection volume between two named shapes
   list_objects      List all named shapes with volume, faces, edges, vertices
+  session_state     Full session JSON: current_shape, all objects, snapshot names
+  health_check      Verify VTK/SVG/STEP/STL dependencies work end-to-end
   search_library    Search the part library by keyword (requires --library)
   load_part         Load a named part with optional parameter overrides (requires --library)
   save_snapshot     Save a named geometric checkpoint
   restore_snapshot  Restore geometry from a named checkpoint
+  diff_snapshot     Compare two snapshots; format="json" for structured output
+  version           Return the server version string
   workflow_hints    Return guidance on using these tools effectively
   reset             Clear the session (namespace, shapes, snapshots)
 

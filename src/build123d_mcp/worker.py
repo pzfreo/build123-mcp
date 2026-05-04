@@ -118,6 +118,10 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from build123d_mcp.tools.health_check import health_check
         return health_check(session)
 
+    if op == "version":
+        from importlib.metadata import version
+        return version("build123d-mcp")
+
     raise ValueError(f"Unknown operation: '{op}'")
 
 
@@ -272,6 +276,9 @@ class WorkerSession:
 
     def health_check(self) -> str:
         return self._call("health_check", {}, self._RENDER_TIMEOUT)
+
+    def version(self) -> str:
+        return self._call("version", {}, self._SHORT_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)
