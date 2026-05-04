@@ -68,10 +68,11 @@ class Session:
         try:
             compiled = compile(code, "<mcp>", "exec")
         except SyntaxError as e:
-            self.last_error_detail = {"type": "SyntaxError", "message": str(e), "line": e.lineno, "excerpt": None}
+            excerpt = self._syntax_excerpt(code, e.lineno)
+            self.last_error_detail = {"type": "SyntaxError", "message": str(e), "line": e.lineno, "excerpt": excerpt}
             return f"Error: SyntaxError: {e}"
 
-        keys_before = {k for k in self.namespace if k not in ("__builtins__", "show")}
+        values_before = {k: self.namespace[k] for k in self.namespace if k not in ("__builtins__", "show")}
         shape_before = self.current_shape
         objects_before = dict(self.objects)
 
@@ -98,14 +99,14 @@ class Session:
             with redirect_stdout(buf), redirect_stderr(buf):
                 exec(compiled, self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
-            self._rollback_namespace(keys_before)
+            self._rollback_namespace(values_before)
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
             self.last_error_detail = {"type": "ExecutionTimeout", "message": str(e), "line": None, "excerpt": None}
             return f"Error: ExecutionTimeout: {e}"
         except AssertionError as e:
-            self._rollback_namespace(keys_before)
+            self._rollback_namespace(values_before)
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
@@ -120,7 +121,7 @@ class Session:
                 signal.signal(signal.SIGALRM, _old_handler)
 
         if exc is not None:
-            self._rollback_namespace(keys_before)
+            self._rollback_namespace(values_before)
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
@@ -128,7 +129,7 @@ class Session:
             return f"Error: {type(exc).__name__}: {exc}"
 
         self.last_error_detail = None
-        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
+        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - values_before.keys()
         self._update_current_shape(new_keys)
 
         output = buf.getvalue() or "OK"
@@ -138,10 +139,24 @@ class Session:
                 output = output.rstrip("\n") + "\n" + diag
         return output
 
-    def _rollback_namespace(self, keys_before: set[str]) -> None:
-        added = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
-        for k in added:
+    def _rollback_namespace(self, values_before: dict[str, Any]) -> None:
+        # Delete keys that didn't exist before; restore values for keys that were overwritten.
+        current = {k for k in self.namespace if k not in ("__builtins__", "show")}
+        for k in current - values_before.keys():
             del self.namespace[k]
+        for k, v in values_before.items():
+            self.namespace[k] = v
+
+    def _syntax_excerpt(self, code: str, lineno: int | None) -> str | None:
+        if lineno is None:
+            return None
+        lines = code.splitlines()
+        start = max(0, lineno - 3)
+        end = min(len(lines), lineno + 2)
+        return "\n".join(
+            f"{i + 1:3d}{'→ ' if i + 1 == lineno else '  '}{lines[i]}"
+            for i in range(start, end)
+        )
 
     def _make_error_detail(self, exc: Exception, code: str) -> dict[str, Any]:
         import traceback as tb_module

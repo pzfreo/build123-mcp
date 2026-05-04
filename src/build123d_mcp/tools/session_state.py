@@ -17,7 +17,22 @@ def _is_imported_symbol(val) -> bool:
     return False
 
 
+def _build123d_public_names() -> set[str]:
+    try:
+        import build123d
+        return set(dir(build123d))
+    except ImportError:
+        return set()
+
+
+_BUILD123D_NAMES: set[str] | None = None
+
+
 def _namespace_summary(namespace: dict) -> dict:
+    global _BUILD123D_NAMES
+    if _BUILD123D_NAMES is None:
+        _BUILD123D_NAMES = _build123d_public_names()
+
     _shape_cls: type | None = None
     try:
         from build123d import Shape
@@ -30,6 +45,8 @@ def _namespace_summary(namespace: dict) -> dict:
         if name.startswith("_") or name in _SKIP:
             continue
         if _is_imported_symbol(val):
+            continue
+        if name in _BUILD123D_NAMES:
             continue
         try:
             typ = type(val).__name__
