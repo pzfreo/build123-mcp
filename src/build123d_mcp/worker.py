@@ -126,6 +126,10 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from build123d_mcp.tools.last_error import last_error
         return last_error(session)
 
+    if op == "shape_compare":
+        from build123d_mcp.tools.shape_compare import shape_compare
+        return shape_compare(session, args["object_a"], args["object_b"])
+
     raise ValueError(f"Unknown operation: '{op}'")
 
 
@@ -286,6 +290,9 @@ class WorkerSession:
 
     def last_error(self) -> str:
         return self._call("last_error", {}, self._SHORT_TIMEOUT)
+
+    def shape_compare(self, object_a: str, object_b: str) -> str:
+        return self._call("shape_compare", {"object_a": object_a, "object_b": object_b}, self._SHORT_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)

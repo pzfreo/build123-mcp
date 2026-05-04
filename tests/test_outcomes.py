@@ -411,6 +411,92 @@ def test_session_state_includes_namespace_variables(session):
 
 
 # ---------------------------------------------------------------------------
+# validate_code()
+# ---------------------------------------------------------------------------
+
+def test_validate_code_clean_script_is_ok():
+    """Well-formed build123d code returns ok=True with no blocked items."""
+    from build123d_mcp.tools.validate_code import validate_code
+    result = json.loads(validate_code("from build123d import *\nresult = Box(10, 10, 10)"))
+    assert result["ok"] is True
+    assert result["syntax"] == "ok"
+    assert result["blocked"] == []
+
+
+def test_validate_code_catches_syntax_error():
+    """A syntax error is reported and ok=False."""
+    from build123d_mcp.tools.validate_code import validate_code
+    result = json.loads(validate_code("def foo(\n  pass"))
+    assert result["ok"] is False
+    assert "SyntaxError" in result["syntax"]
+
+
+def test_validate_code_catches_blocked_import():
+    """Importing os is flagged as blocked."""
+    from build123d_mcp.tools.validate_code import validate_code
+    result = json.loads(validate_code("import os\nresult = Box(10,10,10)"))
+    assert result["ok"] is False
+    assert any("os" in b for b in result["blocked"])
+
+
+def test_validate_code_warns_no_output():
+    """Code with no result assignment or show() call gets a warning."""
+    from build123d_mcp.tools.validate_code import validate_code
+    result = json.loads(validate_code("from build123d import *\nx = 1 + 2"))
+    assert result["ok"] is True  # not blocked, just a warning
+    assert any("result" in w or "show" in w for w in result["warnings"])
+
+
+# ---------------------------------------------------------------------------
+# shape_compare()
+# ---------------------------------------------------------------------------
+
+def test_shape_compare_reports_volume_delta(session):
+    """shape_compare() reports the correct volume difference between two named shapes."""
+    from build123d_mcp.tools.shape_compare import shape_compare
+    execute_code(session, "show(Box(10, 10, 10), 'small')\nshow(Box(20, 20, 20), 'large')")
+    data = json.loads(shape_compare(session, "small", "large"))
+    assert abs(data["a"]["volume"] - 1000) < 1
+    assert abs(data["b"]["volume"] - 8000) < 1
+    assert abs(data["delta"]["volume"] - 7000) < 1
+
+
+def test_shape_compare_identical_shapes_zero_delta(session):
+    """Comparing two identical shapes gives zero volume delta and zero center offset."""
+    from build123d_mcp.tools.shape_compare import shape_compare
+    execute_code(session, "show(Box(10,10,10), 'a')\nshow(Box(10,10,10), 'b')")
+    data = json.loads(shape_compare(session, "a", "b"))
+    assert abs(data["delta"]["volume"]) < 0.001
+    assert data["delta"]["center_offset"] < 0.001
+
+
+# ---------------------------------------------------------------------------
+# repair_hints()
+# ---------------------------------------------------------------------------
+
+def test_repair_hints_matches_nonetype_error():
+    """NoneType attribute error gets the .part hint."""
+    from build123d_mcp.tools.repair_hints import repair_hints
+    result = json.loads(repair_hints("AttributeError: 'NoneType' has no attribute 'volume'"))
+    assert any(".part" in h or "None" in h for h in result["hints"])
+
+
+def test_repair_hints_matches_cq_idiom():
+    """CadQuery-style error text gets the API mismatch hint."""
+    from build123d_mcp.tools.repair_hints import repair_hints
+    result = json.loads(repair_hints("NameError: cq is not defined"))
+    assert any("CadQuery" in h or "build123d" in h for h in result["hints"])
+
+
+def test_repair_hints_fallback_for_unknown_error():
+    """Unrecognised error text returns the generic fallback hint."""
+    from build123d_mcp.tools.repair_hints import repair_hints
+    result = json.loads(repair_hints("some totally unknown error xyz"))
+    assert len(result["hints"]) == 1
+    assert "last_error" in result["hints"][0]
+
+
+# ---------------------------------------------------------------------------
 # Rendering quality and clip plane
 # ---------------------------------------------------------------------------
 
@@ -473,7 +559,7 @@ def test_mcp_lists_all_tools():
     assert names == {"execute", "render_view", "measure", "export", "reset",
                      "save_snapshot", "restore_snapshot", "diff_snapshot", "interference", "list_objects",
                      "search_library", "load_part", "workflow_hints", "session_state", "health_check",
-                     "version", "last_error"}
+                     "version", "last_error", "validate_code", "shape_compare", "repair_hints"}
 
 
 @_skip_mcp_on_win
