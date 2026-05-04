@@ -18,6 +18,7 @@ class Session:
         self.current_shape: Any = None
         self.objects: dict[str, Any] = {}
         self.snapshots: dict[str, Any] = {}
+        self.last_error_detail: dict[str, Any] | None = None
         self._inject_builtins()
 
     def _inject_builtins(self) -> None:
@@ -98,11 +99,14 @@ class Session:
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
+            self.last_error_detail = {"type": "ExecutionTimeout", "message": str(e), "line": None, "excerpt": None}
             return f"Error: ExecutionTimeout: {e}"
         except AssertionError as e:
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
+            msg = str(e) or "Constraint failed"
+            self.last_error_detail = {"type": "AssertionError", "message": msg, "line": None, "excerpt": None}
             return f"Constraint failed: {e}" if str(e) else "Constraint failed"
         except Exception as e:
             exc = e
@@ -115,8 +119,10 @@ class Session:
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
+            self.last_error_detail = self._make_error_detail(exc, code)
             return f"Error: {type(exc).__name__}: {exc}"
 
+        self.last_error_detail = None
         new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
         self._update_current_shape(new_keys)
 
@@ -126,6 +132,22 @@ class Session:
             if diag:
                 output = output.rstrip("\n") + "\n" + diag
         return output
+
+    def _make_error_detail(self, exc: Exception, code: str) -> dict[str, Any]:
+        import traceback as tb_module
+        frames = tb_module.extract_tb(exc.__traceback__)
+        mcp_frames = [f for f in frames if f.filename == "<mcp>"]
+        lineno: int | None = mcp_frames[-1].lineno if mcp_frames else None
+        excerpt: str | None = None
+        if lineno is not None:
+            lines = code.splitlines()
+            start = max(0, lineno - 3)
+            end = min(len(lines), lineno + 2)
+            excerpt = "\n".join(
+                f"{i + 1:3d}{'→ ' if i + 1 == lineno else '  '}{lines[i]}"
+                for i in range(start, end)
+            )
+        return {"type": type(exc).__name__, "message": str(exc), "line": lineno, "excerpt": excerpt}
 
     def _update_current_shape(self, new_keys: set[str]) -> None:
         try:
@@ -174,4 +196,5 @@ class Session:
         self.current_shape = None
         self.objects.clear()
         self.snapshots.clear()
+        self.last_error_detail = None
         self._inject_builtins()

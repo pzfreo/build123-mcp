@@ -53,7 +53,7 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
 
 @mcp.tool()
 def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
-    """Query geometry of a shape. Prefer measure over render_view when verifying geometry — numbers are unambiguous. query: bounding_box, volume, area, min_wall_thickness, clearance, topology. topology (face/edge/vertex counts) is the fastest way to confirm a boolean operation succeeded: a cut that failed leaves the counts unchanged. object_name/object_name2: named objects from show() (clearance requires both)."""
+    """Query geometry of a shape. Prefer measure over render_view when verifying geometry — numbers are unambiguous. query: bounding_box, volume, area, min_wall_thickness, clearance, topology, summary. summary returns bbox + volume + area + topology + center in one call — use it to orient quickly. topology (face/edge/vertex counts) is the fastest way to confirm a boolean operation succeeded: a cut that failed leaves the counts unchanged. object_name/object_name2: named objects from show() (clearance requires both)."""
     return _session.measure(query, object_name, object_name2)
 
 
@@ -116,7 +116,7 @@ def diff_snapshot(snapshot_a: str, snapshot_b: str = "", format: str = "text") -
 
 @mcp.tool()
 def session_state() -> str:
-    """Return a structured JSON snapshot of the current session: current_shape metrics, all named objects with geometry stats, and snapshot names. Use this to orient after a reset, restore, or multi-step build to confirm what geometry is active."""
+    """Return a structured JSON snapshot of the current session: current_shape metrics, all named objects with geometry stats, snapshot names, and a variables summary of the Python namespace (type + volume for shapes, type + length for collections, type + value for scalars). Use this to orient after a reset, restore, or multi-step build to confirm what geometry and variables are active."""
     return _session.session_state()
 
 
@@ -130,6 +130,12 @@ def health_check() -> str:
 def reset() -> str:
     """Clear the current session back to empty state, including all snapshots."""
     return _session.reset()
+
+
+@mcp.tool()
+def last_error() -> str:
+    """Return details of the last failed execute() call: exception type, message, line number within the submitted code, and a 5-line excerpt around the failing line. Returns {\"error\": null} if the last execute() succeeded or no execute() has failed yet. Call this immediately after an execute() error to get the exact failing line — much faster than re-reading the submitted code."""
+    return _session.last_error()
 
 
 @mcp.tool()

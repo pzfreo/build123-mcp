@@ -122,6 +122,10 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from importlib.metadata import version
         return version("build123d-mcp")
 
+    if op == "last_error":
+        from build123d_mcp.tools.last_error import last_error
+        return last_error(session)
+
     raise ValueError(f"Unknown operation: '{op}'")
 
 
@@ -279,6 +283,9 @@ class WorkerSession:
 
     def version(self) -> str:
         return self._call("version", {}, self._SHORT_TIMEOUT)
+
+    def last_error(self) -> str:
+        return self._call("last_error", {}, self._SHORT_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)

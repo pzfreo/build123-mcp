@@ -77,4 +77,23 @@ def measure(session, query: str = "bounding_box", object_name: str = "", object_
             "vertices": len(shape.vertices()),
         }, indent=2)
 
-    raise ValueError(f"Unknown query '{query}'. Use: bounding_box, volume, area, min_wall_thickness, clearance, topology")
+    if query == "summary":
+        bb = shape.bounding_box()
+        cx = round((bb.min.X + bb.max.X) / 2, 4)
+        cy = round((bb.min.Y + bb.max.Y) / 2, 4)
+        cz = round((bb.min.Z + bb.max.Z) / 2, 4)
+        return json.dumps({
+            "volume": round(shape.volume, 4),
+            "area": round(shape.area, 4),
+            "faces": len(shape.faces()),
+            "edges": len(shape.edges()),
+            "vertices": len(shape.vertices()),
+            "bbox": {
+                "xsize": round(bb.size.X, 4),
+                "ysize": round(bb.size.Y, 4),
+                "zsize": round(bb.size.Z, 4),
+            },
+            "center": {"x": cx, "y": cy, "z": cz},
+        }, indent=2)
+
+    raise ValueError(f"Unknown query '{query}'. Use: bounding_box, volume, area, min_wall_thickness, clearance, topology, summary")
