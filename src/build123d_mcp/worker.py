@@ -20,14 +20,14 @@ from typing import Any
 _WORKER_READY_TIMEOUT = 60  # seconds to wait for worker import + ready signal
 
 
-def worker_main(conn: Any, library_path: str = "") -> None:
+def worker_main(conn: Any, library_path: str = "", exec_timeout: int = 30) -> None:
     """Entry point run in the worker subprocess.
 
     Loops receiving requests until the parent closes the connection.
     """
     from build123d_mcp.session import Session
 
-    session = Session()
+    session = Session(exec_timeout=exec_timeout)
     library_index = None
     if library_path:
         from build123d_mcp.tools.library import _LibraryIndex
@@ -136,7 +136,7 @@ class WorkerSession:
         parent_conn, child_conn = ctx.Pipe()
         self._proc = ctx.Process(
             target=worker_main,
-            args=(child_conn, self._library_path),
+            args=(child_conn, self._library_path, self._exec_timeout),
             daemon=True,
         )
         self._proc.start()
