@@ -72,7 +72,11 @@ class Session:
             self.last_error_detail = {"type": "SyntaxError", "message": str(e), "line": e.lineno, "excerpt": excerpt}
             return f"Error: SyntaxError: {e}"
 
-        values_before = {k: self.namespace[k] for k in self.namespace if k not in ("__builtins__", "show")}
+        values_before = {
+            k: v.copy() if isinstance(v, (list, dict, set)) else v
+            for k, v in self.namespace.items()
+            if k not in ("__builtins__", "show")
+        }
         shape_before = self.current_shape
         objects_before = dict(self.objects)
 
