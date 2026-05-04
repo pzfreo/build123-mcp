@@ -342,6 +342,75 @@ def test_clearance_zero_for_touching_shapes(session):
 
 
 # ---------------------------------------------------------------------------
+# measure(summary)
+# ---------------------------------------------------------------------------
+
+def test_measure_summary_returns_all_fields(session):
+    """summary query returns bbox, volume, area, topology, and center in one call."""
+    execute_code(session, "result = Box(10, 20, 30)")
+    data = json.loads(measure(session, "summary"))
+    assert abs(data["volume"] - 6000) < 1
+    assert data["faces"] == 6
+    assert "bbox" in data and abs(data["bbox"]["xsize"] - 10) < 0.01
+    assert "center" in data and abs(data["center"]["x"]) < 0.01
+    assert "area" in data and data["area"] > 0
+
+
+# ---------------------------------------------------------------------------
+# last_error()
+# ---------------------------------------------------------------------------
+
+def test_last_error_captures_type_message_and_line(session):
+    """After a failed execute(), last_error() returns the exception type, message,
+    and the 1-based line number within the submitted code."""
+    from build123d_mcp.tools.last_error import last_error as get_last_error
+    session.execute("x = 1\ny = 2\nraise ValueError('boom')\nz = 3")
+    data = json.loads(get_last_error(session))
+    assert data["type"] == "ValueError"
+    assert "boom" in data["message"]
+    assert data["line"] == 3
+    assert "boom" in data["excerpt"]
+    assert "→" in data["excerpt"]
+
+
+def test_last_error_cleared_after_success(session):
+    """A successful execute() clears last_error."""
+    from build123d_mcp.tools.last_error import last_error as get_last_error
+    session.execute("raise RuntimeError('oops')")
+    assert json.loads(get_last_error(session))["type"] == "RuntimeError"
+    session.execute("result = Box(5, 5, 5)")
+    assert json.loads(get_last_error(session))["error"] is None
+
+
+def test_last_error_null_before_any_failure(session):
+    """last_error() returns {error: null} when no execute() has failed."""
+    from build123d_mcp.tools.last_error import last_error as get_last_error
+    session.execute("result = Box(1, 1, 1)")
+    assert json.loads(get_last_error(session))["error"] is None
+
+
+# ---------------------------------------------------------------------------
+# session_state() namespace variables
+# ---------------------------------------------------------------------------
+
+def test_session_state_includes_namespace_variables(session):
+    """session_state() variables key summarises Python namespace: scalars, lists, Shapes."""
+    from build123d_mcp.tools.session_state import session_state as get_state
+    execute_code(session,
+        "width = 40.0\n"
+        "tags = ['a', 'b', 'c']\n"
+        "result = Box(width, 10, 10)"
+    )
+    data = json.loads(get_state(session))
+    assert "variables" in data
+    vs = data["variables"]
+    assert vs["width"]["type"] == "float" and abs(vs["width"]["value"] - 40.0) < 0.001
+    assert vs["tags"]["type"] == "list" and vs["tags"]["length"] == 3
+    # result is a Shape — should have volume
+    assert "volume" in vs["result"]
+
+
+# ---------------------------------------------------------------------------
 # Rendering quality and clip plane
 # ---------------------------------------------------------------------------
 
@@ -403,7 +472,8 @@ def test_mcp_lists_all_tools():
     names = asyncio.run(_mcp_session(run))
     assert names == {"execute", "render_view", "measure", "export", "reset",
                      "save_snapshot", "restore_snapshot", "diff_snapshot", "interference", "list_objects",
-                     "search_library", "load_part", "workflow_hints", "session_state", "health_check", "version"}
+                     "search_library", "load_part", "workflow_hints", "session_state", "health_check",
+                     "version", "last_error"}
 
 
 @_skip_mcp_on_win
