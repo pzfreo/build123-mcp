@@ -213,7 +213,7 @@ def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevat
     w2i.SetInput(render_window)
     w2i.Update()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         png_path = os.path.join(tmpdir, "render.png")
         writer = vtk.vtkPNGWriter()
         writer.SetFileName(png_path)
@@ -333,7 +333,7 @@ def _do_render_svg(shapes, direction, clip_plane, clip_at, azimuth, elevation) -
         if hidden:
             exporter.add_shape(hidden, layer=layer_hidden)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         svg_path = os.path.join(tmpdir, "render.svg")
         exporter.write(svg_path)
         with open(svg_path, "rb") as f:
@@ -399,6 +399,7 @@ def render_view(
                 result["svg"] = _do_render_svg(
                     shapes, direction, clip_plane, clip_at, azimuth, elevation,
                 )
+                result["format"] = "svg"
                 result["fallback"] = (
                     f"VTK raster render failed ({type(exc).__name__}: {exc}). "
                     f"Returning SVG via build123d HLR projection. "

@@ -1,3 +1,4 @@
+import copy
 import io
 import signal
 from contextlib import redirect_stdout, redirect_stderr
@@ -102,6 +103,9 @@ class Session:
         try:
             with redirect_stdout(buf), redirect_stderr(buf):
                 exec(compiled, self.namespace)  # noqa: S102
+            # Cancel alarm immediately so it cannot fire during post-exec shape detection.
+            if _alarm_set:
+                signal.alarm(0)
         except ExecutionTimeout as e:
             self._rollback_namespace(values_before)
             self.current_shape = shape_before
@@ -206,10 +210,19 @@ class Session:
                 self.current_shape = obj
                 return
 
+    @staticmethod
+    def _copy_shape(shape: Any) -> Any:
+        if shape is None:
+            return None
+        try:
+            return copy.copy(shape)
+        except Exception:
+            return shape
+
     def save_snapshot(self, name: str) -> None:
         self.snapshots[name] = {
-            "current_shape": self.current_shape,
-            "objects": dict(self.objects),
+            "current_shape": self._copy_shape(self.current_shape),
+            "objects": {k: self._copy_shape(v) for k, v in self.objects.items()},
         }
 
     def restore_snapshot(self, name: str) -> None:

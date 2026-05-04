@@ -10,8 +10,8 @@ def health_check(_session) -> str:
     try:
         from build123d import Box
         from build123d_mcp.tools.render import _QUALITY, _do_render_png
-        png = _do_render_png([("test", Box(1, 1, 1), None)], _QUALITY["standard"], "iso", "", None, 0.0, 0.0)
-        results["render_png"] = {"ok": True, "bytes": len(png)}
+        img_bytes, _warnings = _do_render_png([("test", Box(1, 1, 1), None)], _QUALITY["standard"], "iso", "", None, 0.0, 0.0)
+        results["render_png"] = {"ok": True, "bytes": len(img_bytes)}
     except Exception as e:
         results["render_png"] = {"ok": False, "error": str(e)}
 
