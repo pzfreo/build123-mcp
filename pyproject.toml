@@ -20,6 +20,7 @@ dependencies = [
     "mcp",
     "build123d",
     "pyvista",
+    "bd_warehouse",
 ]
 
 [project.urls]
