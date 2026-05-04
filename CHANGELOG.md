@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.3.7
+
+### Features
+
+- **`last_error()` tool**: returns structured JSON for the most recent failed `execute()` call — error type, message, line number, and a 5-line code excerpt with an arrow marker at the failing line. Cleared automatically on success.
+- **`validate_code()` tool**: static analysis of code before execution — catches syntax errors, blocked imports, missing build123d import, and code that produces no output (no `result` assignment or `show()` call). No execution required.
+- **`shape_compare()` tool**: compares two named objects side-by-side — volume, area, topology counts, bounding-box dimensions, and center-point offset delta. Returns structured JSON.
+- **`repair_hints()` tool**: takes an error message and returns a targeted hint from an 11-entry pattern library (NoneType, CadQuery syntax, face selection, interference check, missing show(), etc.). Falls back to a generic hint if nothing matches.
+- **`measure(query="summary")` mode**: single call returning volume, area, topology, bounding-box dimensions, and center — covers the most common post-execute sanity check in one round trip.
+- **`session_state()` namespace variables**: the response now includes a `variables` map summarising all non-shape Python variables in the session namespace (type + value/length).
+- **Assembly export via `object_name='*'`**: `export()` with `object_name='*'` bundles all named objects into a single `Compound` and exports it as one STEP or STL file.
+- **Dual `render_view` response**: returns both an `ImageContent` (base64 PNG for standard MCP clients) and a `TextContent("[SEND: path]")` marker (for Telegram/file-path consumers) so both client types work without configuration.
+
+### Bug fixes
+
+- **Issue #54 — PNG render fails for complex assemblies**: replaced `Mesher`/Lib3MF pipeline with `shape.tessellate()` + direct VTK PolyData construction. Lib3MF's `IsValid()` check was rejecting valid OCCT boolean shapes; `tessellate()` bypasses the Lib3MF layer entirely. Per-shape try/except means partial renders succeed rather than failing the whole call.
+- **Transactional `execute()`**: on any error (exception, timeout, assertion) the session now rolls back `current_shape` and `objects` to their pre-exec state. Failed code can no longer silently advance session geometry.
+- **STL export via `tessellate()`**: `export()` for STL now uses `shape.tessellate()` + a binary STL writer instead of `Mesher`, matching the render fix and avoiding the same Lib3MF failures.
+- **CLI `--python` version**: `--help` epilog now correctly shows `3.12` instead of `3.13` (no Python 3.13 wheels for vtk/cadquery-ocp).
+
+---
+
 ## v0.3.5
 
 ### Features
