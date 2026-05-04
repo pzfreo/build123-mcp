@@ -62,11 +62,13 @@ class Session:
         try:
             check_ast(code)
         except ValueError as e:
+            self.last_error_detail = {"type": "SecurityError", "message": str(e), "line": None, "excerpt": None}
             return f"Error: SecurityError: {e}"
 
         try:
             compiled = compile(code, "<mcp>", "exec")
         except SyntaxError as e:
+            self.last_error_detail = {"type": "SyntaxError", "message": str(e), "line": e.lineno, "excerpt": None}
             return f"Error: SyntaxError: {e}"
 
         keys_before = {k for k in self.namespace if k not in ("__builtins__", "show")}
@@ -96,12 +98,14 @@ class Session:
             with redirect_stdout(buf), redirect_stderr(buf):
                 exec(compiled, self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
+            self._rollback_namespace(keys_before)
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
             self.last_error_detail = {"type": "ExecutionTimeout", "message": str(e), "line": None, "excerpt": None}
             return f"Error: ExecutionTimeout: {e}"
         except AssertionError as e:
+            self._rollback_namespace(keys_before)
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
@@ -116,6 +120,7 @@ class Session:
                 signal.signal(signal.SIGALRM, _old_handler)
 
         if exc is not None:
+            self._rollback_namespace(keys_before)
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
@@ -132,6 +137,11 @@ class Session:
             if diag:
                 output = output.rstrip("\n") + "\n" + diag
         return output
+
+    def _rollback_namespace(self, keys_before: set[str]) -> None:
+        added = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before
+        for k in added:
+            del self.namespace[k]
 
     def _make_error_detail(self, exc: Exception, code: str) -> dict[str, Any]:
         import traceback as tb_module

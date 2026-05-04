@@ -1,8 +1,20 @@
 import json
+import types
 
 from build123d_mcp.tools.diff import _collect
 
 _SKIP = {"__builtins__", "show"}
+
+
+def _is_imported_symbol(val) -> bool:
+    """Return True if val is a class/function/module imported from build123d, not a user value."""
+    if isinstance(val, types.ModuleType):
+        return True
+    mod = getattr(val, '__module__', '') or ''
+    if mod.startswith('build123d') or mod.startswith('cadquery') or mod.startswith('OCP'):
+        if isinstance(val, type) or (callable(val) and not isinstance(val, type)):
+            return True
+    return False
 
 
 def _namespace_summary(namespace: dict) -> dict:
@@ -16,6 +28,8 @@ def _namespace_summary(namespace: dict) -> dict:
     result = {}
     for name, val in namespace.items():
         if name.startswith("_") or name in _SKIP:
+            continue
+        if _is_imported_symbol(val):
             continue
         try:
             typ = type(val).__name__

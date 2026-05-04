@@ -246,6 +246,10 @@ Available tools:
   save_snapshot     Save a named geometric checkpoint
   restore_snapshot  Restore geometry from a named checkpoint
   diff_snapshot     Compare two snapshots; format="json" for structured output
+  last_error        Details of the last failed execute() (type, message, line, excerpt)
+  validate_code     Check code for syntax/security errors before executing
+  shape_compare     Compare two named shapes by geometry metrics
+  repair_hints      Get fix suggestions for a given execute() error message
   version           Return the server version string
   workflow_hints    Return guidance on using these tools effectively
   reset             Clear the session (namespace, shapes, snapshots)
