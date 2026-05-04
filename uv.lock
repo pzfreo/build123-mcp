@@ -99,7 +99,7 @@ wheels = [
 
 [[package]]
 name = "build123d-mcp"
-version = "0.3.8"
+version = "0.3.10"
 source = { editable = "." }
 dependencies = [
     { name = "bd-warehouse" },
