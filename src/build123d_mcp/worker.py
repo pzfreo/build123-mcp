@@ -108,7 +108,15 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
 
     if op == "diff_snapshot":
         from build123d_mcp.tools.diff import diff_snapshot
-        return diff_snapshot(session, args["snapshot_a"], args.get("snapshot_b", ""))
+        return diff_snapshot(session, args["snapshot_a"], args.get("snapshot_b", ""), args.get("format", "text"))
+
+    if op == "session_state":
+        from build123d_mcp.tools.session_state import session_state
+        return session_state(session)
+
+    if op == "health_check":
+        from build123d_mcp.tools.health_check import health_check
+        return health_check(session)
 
     raise ValueError(f"Unknown operation: '{op}'")
 
@@ -256,8 +264,14 @@ class WorkerSession:
             return "Session reset."
         return self._call("reset", {}, self._SHORT_TIMEOUT)
 
-    def diff_snapshot(self, snapshot_a: str, snapshot_b: str = "") -> str:
-        return self._call("diff_snapshot", {"snapshot_a": snapshot_a, "snapshot_b": snapshot_b}, self._SHORT_TIMEOUT)
+    def diff_snapshot(self, snapshot_a: str, snapshot_b: str = "", format: str = "text") -> str:
+        return self._call("diff_snapshot", {"snapshot_a": snapshot_a, "snapshot_b": snapshot_b, "format": format}, self._SHORT_TIMEOUT)
+
+    def session_state(self) -> str:
+        return self._call("session_state", {}, self._SHORT_TIMEOUT)
+
+    def health_check(self) -> str:
+        return self._call("health_check", {}, self._RENDER_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)

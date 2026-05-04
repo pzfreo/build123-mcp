@@ -10,8 +10,10 @@ from build123d_mcp.tools.export import export_file
 from build123d_mcp.tools.interference import interference
 from build123d_mcp.tools.measure import measure
 from build123d_mcp.tools.diff import diff_snapshot
+from build123d_mcp.tools.health_check import health_check
 from build123d_mcp.tools.list_objects import list_objects
 from build123d_mcp.tools.render import render_view
+from build123d_mcp.tools.session_state import session_state
 
 # A path guaranteed to resolve outside any allowed write root (cwd, tempdir, /tmp)
 # on each platform. /etc/passwd on POSIX; on Windows we use the system hosts file,
@@ -867,3 +869,47 @@ def test_diff_snapshot_unchanged_object_marked(session):
     session.save_snapshot("s2")
     result = diff_snapshot(session, "s1", "s2")
     assert "unchanged" in result or "= base" in result
+
+
+# --- session_state ---
+
+def test_session_state_empty(session):
+    data = json.loads(session_state(session))
+    assert data["current_shape"] is None
+    assert data["objects"] == {}
+    assert data["snapshots"] == []
+
+
+def test_session_state_with_shape_and_objects(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    execute_code(session, "show(Cylinder(5, 20), 'pin')")
+    session.save_snapshot("v1")
+    data = json.loads(session_state(session))
+    assert data["current_shape"]["volume"] > 0
+    assert "pin" in data["objects"]
+    assert "v1" in data["snapshots"]
+
+
+# --- diff_snapshot JSON mode ---
+
+def test_diff_snapshot_json_format(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    session.save_snapshot("s1")
+    execute_code(session, "result = Box(20, 20, 20)")
+    data = json.loads(diff_snapshot(session, "s1", format="json"))
+    assert data["a"]["label"] == "s1"
+    assert data["b"]["label"] == "current"
+    assert data["b"]["current_shape"]["volume"] > data["a"]["current_shape"]["volume"]
+
+
+# --- health_check ---
+
+def test_health_check_returns_json(session):
+    data = json.loads(health_check(session))
+    assert "ok" in data
+    assert "export_step" in data
+    assert "export_stl" in data
+    assert "render_svg" in data
+    assert data["export_step"]["ok"] is True
+    assert data["export_stl"]["ok"] is True
+    assert data["render_svg"]["ok"] is True

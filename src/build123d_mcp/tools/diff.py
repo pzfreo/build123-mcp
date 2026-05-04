@@ -46,7 +46,7 @@ def _fmt_shape_diff(a: dict | None, b: dict | None, label: str) -> str | None:
     return "\n".join(lines)
 
 
-def diff_snapshot(session, snapshot_a: str, snapshot_b: str = "") -> str:
+def diff_snapshot(session, snapshot_a: str, snapshot_b: str = "", format: str = "text") -> str:
     if snapshot_a not in session.snapshots:
         return f"Error: no snapshot named '{snapshot_a}'. Available: {list(session.snapshots.keys())}"
 
@@ -61,6 +61,10 @@ def diff_snapshot(session, snapshot_a: str, snapshot_b: str = "") -> str:
         diag_b = _collect(snap_b["current_shape"], snap_b["objects"])
     else:
         diag_b = _collect(session.current_shape, session.objects)
+
+    if format == "json":
+        import json
+        return json.dumps({"a": {"label": snapshot_a, **diag_a}, "b": {"label": label_b, **diag_b}}, indent=2)
 
     lines = [f"diff: {snapshot_a} → {label_b}", ""]
 

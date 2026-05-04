@@ -99,9 +99,21 @@ def restore_snapshot(name: str) -> str:
 
 
 @mcp.tool()
-def diff_snapshot(snapshot_a: str, snapshot_b: str = "") -> str:
-    """Compare two snapshots by geometry metrics (volume, topology, bounding box). snapshot_b defaults to current session state if omitted. Reports volume delta, topology changes, and added/removed/changed objects — useful for confirming that a fillet, cut, or other operation changed geometry as expected."""
-    return _session.diff_snapshot(snapshot_a, snapshot_b)
+def diff_snapshot(snapshot_a: str, snapshot_b: str = "", format: str = "text") -> str:
+    """Compare two snapshots by geometry metrics (volume, topology, bounding box). snapshot_b defaults to current session state if omitted. format: 'text' (default, human-readable) or 'json' (structured, for programmatic consumption)."""
+    return _session.diff_snapshot(snapshot_a, snapshot_b, format)
+
+
+@mcp.tool()
+def session_state() -> str:
+    """Return a structured JSON snapshot of the current session: current_shape metrics, all named objects with geometry stats, and snapshot names. Use this to orient after a reset, restore, or multi-step build to confirm what geometry is active."""
+    return _session.session_state()
+
+
+@mcp.tool()
+def health_check() -> str:
+    """Verify that render and export dependencies are working. Tests PNG render (VTK), SVG render (build123d HLR), STEP export, and STL export with a trivial shape. Returns JSON with ok/error per capability. Run at session start if you suspect a missing dependency."""
+    return _session.health_check()
 
 
 @mcp.tool()
