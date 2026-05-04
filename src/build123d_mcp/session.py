@@ -70,6 +70,7 @@ class Session:
 
         keys_before = {k for k in self.namespace if k not in ("__builtins__", "show")}
         shape_before = self.current_shape
+        objects_before = dict(self.objects)
 
         buf = io.StringIO()
         exc: Exception | None = None
@@ -94,8 +95,14 @@ class Session:
             with redirect_stdout(buf), redirect_stderr(buf):
                 exec(compiled, self.namespace)  # noqa: S102
         except ExecutionTimeout as e:
+            self.current_shape = shape_before
+            self.objects.clear()
+            self.objects.update(objects_before)
             return f"Error: ExecutionTimeout: {e}"
         except AssertionError as e:
+            self.current_shape = shape_before
+            self.objects.clear()
+            self.objects.update(objects_before)
             return f"Constraint failed: {e}" if str(e) else "Constraint failed"
         except Exception as e:
             exc = e
@@ -105,6 +112,9 @@ class Session:
                 signal.signal(signal.SIGALRM, _old_handler)
 
         if exc is not None:
+            self.current_shape = shape_before
+            self.objects.clear()
+            self.objects.update(objects_before)
             return f"Error: {type(exc).__name__}: {exc}"
 
         new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - keys_before

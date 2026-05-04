@@ -34,7 +34,12 @@ build123d-mcp = "build123d_mcp.server:main"
 packages = ["src/build123d_mcp"]
 
 [dependency-groups]
-dev = ["pytest", "pytest-timeout", "mypy"]
+dev = [
+    "pytest",
+    "pytest-timeout",
+    "mypy",
+    "pytest-cov>=7.1.0",
+]
 
 [tool.mypy]
 files = ["src"]
