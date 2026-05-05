@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/build123d-mcp)](https://pypi.org/project/build123d-mcp/)
 [![CI](https://github.com/pzfreo/build123d-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pzfreo/build123d-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![build123d-mcp MCP server](https://glama.ai/mcp/servers/pzfreo/build123d-mcp/badges/card.svg)](https://glama.ai/mcp/servers/pzfreo/build123d-mcp)
+[![build123d-mcp MCP server](https://glama.ai/mcp/servers/pzfreo/build123d-mcp/badges/score.svg)](https://glama.ai/mcp/servers/pzfreo/build123d-mcp)
 
 An MCP (Model Context Protocol) server that exposes build123d CAD operations as tools, enabling AI assistants to build, inspect, and iterate on 3D geometry interactively.
 
