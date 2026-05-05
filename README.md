@@ -32,7 +32,7 @@ See [llms.md](llms.md) for full tool reference and usage patterns.
 - [uv](https://github.com/astral-sh/uv)
 - An MCP-compatible client (Claude Code, Claude Desktop, Cursor, etc.)
 
-All Python dependencies (build123d, pyvista, etc.) are installed automatically by uv.
+All Python dependencies (build123d, vtk, etc.) are installed automatically by uv.
 
 ## Installation
 
@@ -42,15 +42,15 @@ No clone needed. Install directly from PyPI:
 pip install build123d-mcp
 ```
 
-Or just use `uvx` — it fetches and runs the package in one step with no prior install required (see below).
+Or just use `uv tool run` — it fetches and runs the package in one step with no prior install required (see below).
 
 ---
 
 ## Adding to MCP clients
 
-The server runs over stdio — the client launches it as a subprocess using `uvx build123d-mcp`.
+The server runs over stdio — the client launches it as a subprocess using `uv tool run build123d-mcp`.
 
-> **Note on Python version.** All examples below pass `--python 3.12` to `uvx`. The `vtk` and `cadquery-ocp` dependencies do not yet ship wheels for Python 3.13+, so pinning to 3.12 is required. uv will auto-download a managed Python 3.12 if you don't already have one.
+> **Note on Python version.** All examples below pass `--python 3.12`. VTK and cadquery-ocp do not yet ship wheels for Python 3.13+, so pinning to 3.12 is required. uv will auto-download a managed Python 3.12 if you don't already have one.
 
 ### Claude Code
 
@@ -60,8 +60,8 @@ Add to your project's `.mcp.json` (or `~/.claude/mcp.json` for global use):
 {
   "mcpServers": {
     "build123d-mcp": {
-      "command": "uvx",
-      "args": ["--python", "3.12", "build123d-mcp"]
+      "command": "uv",
+      "args": ["tool", "run", "--python", "3.12", "build123d-mcp"]
     }
   }
 }
@@ -77,8 +77,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 {
   "mcpServers": {
     "build123d-mcp": {
-      "command": "uvx",
-      "args": ["--python", "3.12", "build123d-mcp"]
+      "command": "uv",
+      "args": ["tool", "run", "--python", "3.12", "build123d-mcp"]
     }
   }
 }
@@ -94,8 +94,8 @@ Open **Settings → MCP** and add a new server entry, or edit `~/.cursor/mcp.jso
 {
   "mcpServers": {
     "build123d-mcp": {
-      "command": "uvx",
-      "args": ["--python", "3.12", "build123d-mcp"]
+      "command": "uv",
+      "args": ["tool", "run", "--python", "3.12", "build123d-mcp"]
     }
   }
 }
@@ -110,8 +110,8 @@ For **Continue** extension, add to `.continue/config.json`:
   "mcpServers": [
     {
       "name": "build123d-mcp",
-      "command": "uvx",
-      "args": ["--python", "3.12", "build123d-mcp"]
+      "command": "uv",
+      "args": ["tool", "run", "--python", "3.12", "build123d-mcp"]
     }
   ]
 }
@@ -124,8 +124,8 @@ For **GitHub Copilot** with MCP support, add to `.vscode/mcp.json` in your works
   "servers": {
     "build123d-mcp": {
       "type": "stdio",
-      "command": "uvx",
-      "args": ["--python", "3.12", "build123d-mcp"]
+      "command": "uv",
+      "args": ["tool", "run", "--python", "3.12", "build123d-mcp"]
     }
   }
 }

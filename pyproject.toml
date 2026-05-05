@@ -19,7 +19,6 @@ classifiers = [
 dependencies = [
     "mcp",
     "build123d",
-    "pyvista",
     "bd_warehouse",
 ]
 

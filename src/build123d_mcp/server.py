@@ -226,8 +226,8 @@ MCP client configuration example:
   {
     "mcpServers": {
       "build123d": {
-        "command": "uvx",
-        "args": ["--python", "3.12", "build123d-mcp", "--library", "/path/to/parts"]
+        "command": "uv",
+        "args": ["tool", "run", "--python", "3.12", "build123d-mcp", "--library", "/path/to/parts"]
       }
     }
   }
@@ -279,6 +279,12 @@ Part library file format (Python, any .py file under --library path):
         help="Disable the import allowlist — any Python module can be imported. "
              "Use only in trusted environments. Overrides BUILD123D_ALLOW_ALL_IMPORTS env var.",
     )
+    parser.add_argument(
+        "--exec-timeout", metavar="SECONDS", type=int,
+        default=int(os.environ.get("BUILD123D_EXEC_TIMEOUT", "60")),
+        help="Execution time limit in seconds for user code (default: 60). "
+             "Overrides BUILD123D_EXEC_TIMEOUT env var.",
+    )
     args = parser.parse_args()
 
     if args.library and not os.path.isdir(args.library):
@@ -290,7 +296,7 @@ Part library file format (Python, any .py file under --library path):
 
     global _session, _has_library
     _has_library = bool(args.library)
-    _session = WorkerSession(library_path=args.library, allow_all_imports=args.allow_all_imports)
+    _session = WorkerSession(library_path=args.library, allow_all_imports=args.allow_all_imports, exec_timeout=args.exec_timeout)
 
     mcp.run()
 

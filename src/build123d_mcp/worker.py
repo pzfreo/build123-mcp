@@ -20,7 +20,7 @@ from typing import Any
 _WORKER_READY_TIMEOUT = 60  # seconds to wait for worker import + ready signal
 
 
-def worker_main(conn: Any, library_path: str = "", exec_timeout: int = 30, allow_all_imports: bool = False) -> None:
+def worker_main(conn: Any, library_path: str = "", exec_timeout: int = 60, allow_all_imports: bool = False) -> None:
     """Entry point run in the worker subprocess.
 
     Loops receiving requests until the parent closes the connection.
@@ -148,7 +148,7 @@ class WorkerSession:
     _INTERFERENCE_TIMEOUT = 30
     _SHORT_TIMEOUT = 10
 
-    def __init__(self, exec_timeout: int = 30, library_path: str = "", allow_all_imports: bool = False) -> None:
+    def __init__(self, exec_timeout: int = 60, library_path: str = "", allow_all_imports: bool = False) -> None:
         self._exec_timeout = exec_timeout
         self._library_path = library_path
         self._allow_all_imports = allow_all_imports
