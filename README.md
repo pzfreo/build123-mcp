@@ -142,3 +142,5 @@ For best results, paste the contents of [default_prompt.md](default_prompt.md) a
 ## Status
 
 Active development (v0.1.0).
+
+<!-- mcp-name: io.github.pzfreo/build123d-mcp -->

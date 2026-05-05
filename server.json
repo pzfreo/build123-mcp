@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pzfreo/build123d-mcp",
+  "title": "build123d MCP",
+  "description": "AI-driven 3D CAD via build123d: execute, render, measure, and export geometry interactively.",
+  "repository": {
+    "url": "https://github.com/pzfreo/build123d-mcp",
+    "source": "github"
+  },
+  "version": "0.3.11",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "build123d-mcp",
+      "version": "0.3.11",
+      "transport": {
+        "type": "stdio"
+      },
+      "installationInstructions": "uv tool run --python 3.12 build123d-mcp"
+    }
+  ]
+}
