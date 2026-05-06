@@ -12,6 +12,10 @@ from build123d_mcp.security import (
 )
 
 
+# Names injected by the session itself — excluded from rollback and new-key detection.
+_INJECTED = frozenset({"__builtins__", "show", "named_face"})
+
+
 class Session:
     def __init__(self, exec_timeout: int = EXEC_TIMEOUT_SECONDS):
         self.exec_timeout = exec_timeout
@@ -41,6 +45,23 @@ class Session:
                 print(f"Registered '{name}'")
 
         self.namespace["show"] = show
+
+        def named_face(shape: Any, name: str) -> Any:
+            """Return a face of shape by semantic name: top/bottom/front/back/left/right."""
+            from build123d import Axis
+            match name.lower():
+                case "top":    return shape.faces().sort_by(Axis.Z)[-1]
+                case "bottom": return shape.faces().sort_by(Axis.Z)[0]
+                case "front":  return shape.faces().sort_by(Axis.Y)[-1]
+                case "back":   return shape.faces().sort_by(Axis.Y)[0]
+                case "right":  return shape.faces().sort_by(Axis.X)[-1]
+                case "left":   return shape.faces().sort_by(Axis.X)[0]
+                case _:
+                    raise ValueError(
+                        f"Unknown face name '{name}'. Use: top, bottom, front, back, left, right"
+                    )
+
+        self.namespace["named_face"] = named_face
 
     def _quick_diagnostics(self, shape) -> str:
         try:
@@ -76,7 +97,7 @@ class Session:
         values_before = {
             k: v.copy() if isinstance(v, (list, dict, set)) else v
             for k, v in self.namespace.items()
-            if k not in ("__builtins__", "show")
+            if k not in _INJECTED
         }
         shape_before = self.current_shape
         objects_before = dict(self.objects)
@@ -137,7 +158,7 @@ class Session:
             return f"Error: {type(exc).__name__}: {exc}"
 
         self.last_error_detail = None
-        new_keys = {k for k in self.namespace if k not in ("__builtins__", "show")} - values_before.keys()
+        new_keys = {k for k in self.namespace if k not in _INJECTED} - values_before.keys()
         self._update_current_shape(new_keys)
 
         output = buf.getvalue() or "OK"
@@ -149,7 +170,7 @@ class Session:
 
     def _rollback_namespace(self, values_before: dict[str, Any]) -> None:
         # Delete keys that didn't exist before; restore values for keys that were overwritten.
-        current = {k for k in self.namespace if k not in ("__builtins__", "show")}
+        current = {k for k in self.namespace if k not in _INJECTED}
         for k in current - values_before.keys():
             del self.namespace[k]
         for k, v in values_before.items():

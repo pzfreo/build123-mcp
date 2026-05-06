@@ -44,12 +44,12 @@ _HINTS: list[tuple[list[str], str]] = [
     ),
     (
         [r"ImportError", r"SecurityError", r"not allowed.*import", r"import.*not allowed"],
-        "Import blocked. Allowed modules: build123d, bd_warehouse, math, numpy, decimal, "
-        "fractions, statistics, numbers, random, collections, itertools, functools, copy, "
-        "operator, struct, typing, abc, dataclasses, enum, re, string, textwrap, pprint, "
-        "json, base64, hashlib, io, warnings, contextlib. "
-        "Remove os, sys, pathlib, subprocess, socket, and network imports. "
-        "Start the server with --allow-all-imports to disable this check entirely.",
+        "Import blocked. Allowed modules include: build123d, bd_warehouse, math, numpy, "
+        "json, re, collections, itertools, functools, copy, typing, dataclasses, enum, "
+        "and most OCP geometry sub-modules (OCP.gp, OCP.BRepGProp, OCP.TopExp, "
+        "OCP.BRepAlgoAPI, OCP.BRepAdaptor, OCP.GeomAbs, OCP.ShapeAnalysis, etc.). "
+        "Blocked: os, sys, pathlib, subprocess, socket, OCP.STEPControl, OCP.IGESControl, "
+        "OCP.OSD (file I/O). Start with --allow-all-imports to disable this check entirely.",
     ),
     (
         [r"Constraint failed", r"AssertionError"],

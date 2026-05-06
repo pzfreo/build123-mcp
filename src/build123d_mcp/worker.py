@@ -75,6 +75,14 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from build123d_mcp.tools.measure import measure
         return measure(session, **args)
 
+    if op == "clearance":
+        from build123d_mcp.tools.measure import clearance
+        return clearance(session, **args)
+
+    if op == "cross_sections":
+        from build123d_mcp.tools.cross_sections import cross_sections
+        return cross_sections(session, **args)
+
     if op == "list_objects":
         from build123d_mcp.tools.list_objects import list_objects
         return list_objects(session)
@@ -133,6 +141,10 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
     if op == "shape_compare":
         from build123d_mcp.tools.shape_compare import shape_compare
         return shape_compare(session, args["object_a"], args["object_b"])
+
+    if op == "import_cad_file":
+        from build123d_mcp.tools.import_step import import_cad_file
+        return import_cad_file(session, args["path"], args.get("name", ""))
 
     raise ValueError(f"Unknown operation: '{op}'")
 
@@ -259,10 +271,16 @@ class WorkerSession:
             self._INTERFERENCE_TIMEOUT,
         )
 
-    def measure(self, query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
+    def measure(self, object_name: str = "") -> str:
+        return self._call("measure", {"object_name": object_name}, self._SHORT_TIMEOUT)
+
+    def clearance(self, object_a: str, object_b: str) -> str:
+        return self._call("clearance", {"object_a": object_a, "object_b": object_b}, self._SHORT_TIMEOUT)
+
+    def cross_sections(self, object_name: str = "", axis: str = "Z", num_slices: int = 10) -> str:
         return self._call(
-            "measure",
-            {"query": query, "object_name": object_name, "object_name2": object_name2},
+            "cross_sections",
+            {"object_name": object_name, "axis": axis, "num_slices": num_slices},
             self._SHORT_TIMEOUT,
         )
 
@@ -298,6 +316,9 @@ class WorkerSession:
 
     def shape_compare(self, object_a: str, object_b: str) -> str:
         return self._call("shape_compare", {"object_a": object_a, "object_b": object_b}, self._SHORT_TIMEOUT)
+
+    def import_cad_file(self, path: str, name: str = "") -> str:
+        return self._call("import_cad_file", {"path": path, "name": name}, self._EXPORT_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)

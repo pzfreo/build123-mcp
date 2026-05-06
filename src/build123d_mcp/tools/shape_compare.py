@@ -1,6 +1,7 @@
 import json
 
 from build123d_mcp.tools.diff import _shape_diag
+from build123d_mcp.tools.measure import _center_of_mass
 
 
 def shape_compare(session, object_a: str, object_b: str) -> str:
@@ -12,15 +13,7 @@ def shape_compare(session, object_a: str, object_b: str) -> str:
     sa, sb = session.objects[object_a], session.objects[object_b]
     da, db = _shape_diag(sa), _shape_diag(sb)
 
-    def _center(shape):
-        bb = shape.bounding_box()
-        return {
-            "x": round((bb.min.X + bb.max.X) / 2, 4),
-            "y": round((bb.min.Y + bb.max.Y) / 2, 4),
-            "z": round((bb.min.Z + bb.max.Z) / 2, 4),
-        }
-
-    ca, cb = _center(sa), _center(sb)
+    ca, cb = _center_of_mass(sa), _center_of_mass(sb)
     offset = round(((cb["x"] - ca["x"])**2 + (cb["y"] - ca["y"])**2 + (cb["z"] - ca["z"])**2) ** 0.5, 4)
 
     return json.dumps({

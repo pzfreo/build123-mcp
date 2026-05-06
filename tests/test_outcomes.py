@@ -36,8 +36,8 @@ def test_incremental_construction_extends_geometry(session):
     """Second execute can reference and extend geometry from the first."""
     execute_code(session, "b = Box(20, 20, 20)")
     execute_code(session, "result = b + Cylinder(5, 30)")
-    bb = json.loads(measure(session, "bounding_box"))
-    assert bb["zsize"] > 20  # cylinder taller than box
+    data = json.loads(measure(session))
+    assert data["bbox"]["zsize"] > 20  # cylinder taller than box
 
 
 def test_boolean_subtraction_removes_material(session):
@@ -52,10 +52,10 @@ def test_create_measure_export_round_trip(session, tmp_path, monkeypatch):
     """Create a known shape, verify its dimensions, then export it."""
     monkeypatch.chdir(tmp_path)
     execute_code(session, "result = Box(30, 20, 10)")
-    data = json.loads(measure(session, "bounding_box"))
-    assert abs(data["xsize"] - 30) < 0.01
-    assert abs(data["ysize"] - 20) < 0.01
-    assert abs(data["zsize"] - 10) < 0.01
+    data = json.loads(measure(session))
+    assert abs(data["bbox"]["xsize"] - 30) < 0.01
+    assert abs(data["bbox"]["ysize"] - 20) < 0.01
+    assert abs(data["bbox"]["zsize"] - 10) < 0.01
 
     export_file(session, "out", "step")
     # A real STEP file for a simple box is several kilobytes
@@ -93,8 +93,8 @@ def test_reset_discards_previous_geometry(session):
     session.reset()
     session.execute("from build123d import *")
     execute_code(session, "result = Box(5, 5, 5)")
-    bb = json.loads(measure(session, "bounding_box"))
-    assert abs(bb["xsize"] - 5) < 0.01
+    data = json.loads(measure(session))
+    assert abs(data["bbox"]["xsize"] - 5) < 0.01
 
 
 def test_render_changes_when_model_changes(session):
@@ -151,8 +151,8 @@ def test_normal_workflow_unaffected_by_security(session):
     """Security hardening does not break a legitimate build123d session."""
     execute_code(session, "import math\nresult = Cylinder(math.pi, 20)")
     assert session.current_shape is not None
-    bb = json.loads(measure(session, "bounding_box"))
-    assert bb["zsize"] > 0
+    data = json.loads(measure(session))
+    assert data["bbox"]["zsize"] > 0
 
 
 def test_builtins_import_restriction_independent_of_ast(session):
@@ -173,14 +173,14 @@ def test_snapshot_restores_geometry_after_bad_experiment(session):
     """save_snapshot / restore_snapshot recovers known-good geometry."""
     execute_code(session, "result = Box(10, 10, 10)")
     session.save_snapshot("good")
-    good_vol = json.loads(measure(session, "volume"))["volume"]
+    good_vol = json.loads(measure(session))["volume"]
 
     # Simulate an experiment that produces wrong geometry
     execute_code(session, "result = Box(1, 1, 1)")
-    assert json.loads(measure(session, "volume"))["volume"] < good_vol
+    assert json.loads(measure(session))["volume"] < good_vol
 
     session.restore_snapshot("good")
-    assert abs(json.loads(measure(session, "volume"))["volume"] - good_vol) < 0.1
+    assert abs(json.loads(measure(session))["volume"] - good_vol) < 0.1
 
 
 def test_snapshot_objects_registry_survives_round_trip(session):
@@ -192,8 +192,8 @@ def test_snapshot_objects_registry_survives_round_trip(session):
     execute_code(session, "show(Box(1, 1, 1), 'frame')\nshow(Box(1, 1, 1), 'axle')")
     session.restore_snapshot("assembly_v1")
 
-    frame_bb = json.loads(measure(session, "bounding_box", "frame"))
-    axle_bb = json.loads(measure(session, "bounding_box", "axle"))
+    frame_bb = json.loads(measure(session, "frame"))["bbox"]
+    axle_bb = json.loads(measure(session, "axle"))["bbox"]
     assert abs(frame_bb["xsize"] - 60) < 0.1
     assert abs(axle_bb["zsize"] - 50) < 0.1
 
@@ -216,8 +216,8 @@ def test_namespace_not_restored_by_snapshot(session):
 def test_named_objects_have_independent_bounding_boxes(session):
     """show() isolates shapes: each named object reports its own dimensions."""
     execute_code(session, "show(Box(5, 5, 5), 'small')\nshow(Box(40, 40, 40), 'large')")
-    small = json.loads(measure(session, "bounding_box", "small"))
-    large = json.loads(measure(session, "bounding_box", "large"))
+    small = json.loads(measure(session, "small"))["bbox"]
+    large = json.loads(measure(session, "large"))["bbox"]
     assert abs(small["xsize"] - 5) < 0.01
     assert abs(large["xsize"] - 40) < 0.01
 
@@ -295,9 +295,9 @@ def test_reset_clears_show_registry(session):
 def test_volume_detects_missing_boolean(session):
     """volume() exposes the difference between a solid and a hollowed part."""
     execute_code(session, "show(Box(20, 20, 20), 'full')")
-    solid_vol = json.loads(measure(session, "volume", "full"))["volume"]
+    solid_vol = json.loads(measure(session, "full"))["volume"]
     execute_code(session, "show(Box(20, 20, 20) - Cylinder(5, 22), 'hollow')")
-    hollow_vol = json.loads(measure(session, "volume", "hollow"))["volume"]
+    hollow_vol = json.loads(measure(session, "hollow"))["volume"]
     assert hollow_vol < solid_vol
     assert abs(solid_vol - 8000) < 1
 
@@ -305,27 +305,20 @@ def test_volume_detects_missing_boolean(session):
 def test_area_increases_after_adding_surface(session):
     """Surface area grows when a protrusion is added."""
     execute_code(session, "result = Box(10, 10, 10)")
-    base_area = json.loads(measure(session, "area"))["area"]
+    base_area = json.loads(measure(session))["area"]
     execute_code(session, "result = Box(10, 10, 10) + Cylinder(2, 5).move(Location((0, 0, 7.5)))")
-    new_area = json.loads(measure(session, "area"))["area"]
+    new_area = json.loads(measure(session))["area"]
     assert new_area > base_area
 
 
-def test_min_wall_thickness_thinnest_wall_reported(session):
-    """A shape with one thin wall reports that wall's thickness."""
-    # Slab 20x20 wide but only 3mm thick
-    execute_code(session, "result = Box(20, 20, 3)")
-    data = json.loads(measure(session, "min_wall_thickness"))
-    assert abs(data["min_wall_thickness"] - 3) < 0.5
-
-
 def test_clearance_between_assembly_parts(session):
-    """Clearance query returns the gap between two registered bodies."""
+    """Clearance between two registered bodies."""
+    from build123d_mcp.tools.measure import clearance as _clearance
     execute_code(session,
         "show(Cylinder(4, 30), 'shaft')\n"
         "show(Box(30, 30, 30) - Cylinder(5, 32), 'bore_housing')"
     )
-    data = json.loads(measure(session, "clearance", "shaft", "bore_housing"))
+    data = json.loads(_clearance(session, "shaft", "bore_housing"))
     # shaft radius 4, bore radius 5 — clearance should be ~1mm
     assert data["clearance"] >= 0
     assert data["clearance"] < 5
@@ -333,11 +326,12 @@ def test_clearance_between_assembly_parts(session):
 
 def test_clearance_zero_for_touching_shapes(session):
     """Touching shapes report zero clearance."""
+    from build123d_mcp.tools.measure import clearance as _clearance
     execute_code(session,
         "show(Box(10, 10, 10), 'a')\n"
         "show(Box(10, 10, 10).move(Location((10, 0, 0))), 'b')"
     )
-    data = json.loads(measure(session, "clearance", "a", "b"))
+    data = json.loads(_clearance(session, "a", "b"))
     assert data["clearance"] < 0.01
 
 
@@ -345,15 +339,18 @@ def test_clearance_zero_for_touching_shapes(session):
 # measure(summary)
 # ---------------------------------------------------------------------------
 
-def test_measure_summary_returns_all_fields(session):
-    """summary query returns bbox, volume, area, topology, and center in one call."""
+def test_measure_returns_all_fields(session):
+    """measure() returns bbox, volume, area, topology, center_of_mass, inertia, face_inventory."""
     execute_code(session, "result = Box(10, 20, 30)")
-    data = json.loads(measure(session, "summary"))
+    data = json.loads(measure(session))
     assert abs(data["volume"] - 6000) < 1
-    assert data["faces"] == 6
+    assert data["topology"]["faces"] == 6
     assert "bbox" in data and abs(data["bbox"]["xsize"] - 10) < 0.01
-    assert "center" in data and abs(data["center"]["x"]) < 0.01
+    assert abs(data["bbox"]["center"]["x"]) < 0.01
     assert "area" in data and data["area"] > 0
+    assert "center_of_mass" in data
+    assert "inertia" in data
+    assert "face_inventory" in data
 
 
 # ---------------------------------------------------------------------------
@@ -559,7 +556,8 @@ def test_mcp_lists_all_tools():
     assert names == {"execute", "render_view", "measure", "export", "reset",
                      "save_snapshot", "restore_snapshot", "diff_snapshot", "interference", "list_objects",
                      "search_library", "load_part", "workflow_hints", "session_state", "health_check",
-                     "version", "last_error", "validate_code", "shape_compare", "repair_hints"}
+                     "version", "last_error", "validate_code", "shape_compare", "repair_hints",
+                     "import_cad_file", "cross_sections", "clearance"}
 
 
 @_skip_mcp_on_win
@@ -569,13 +567,13 @@ def test_mcp_execute_and_measure_round_trip():
             "execute",
             {"code": "from build123d import *\nresult = Box(10, 20, 30)"},
         )
-        result = await mcp.call_tool("measure", {"query": "bounding_box"})
+        result = await mcp.call_tool("measure", {})
         return result.content[0].text
 
     data = json.loads(asyncio.run(_mcp_session(run)))
-    assert abs(data["xsize"] - 10) < 0.01
-    assert abs(data["ysize"] - 20) < 0.01
-    assert abs(data["zsize"] - 30) < 0.01
+    assert abs(data["bbox"]["xsize"] - 10) < 0.01
+    assert abs(data["bbox"]["ysize"] - 20) < 0.01
+    assert abs(data["bbox"]["zsize"] - 30) < 0.01
 
 
 @_skip_mcp_on_win
@@ -615,7 +613,7 @@ def test_mcp_reset_clears_state():
         )
         await mcp.call_tool("reset", {})
         # measure should now fail — no shape
-        result = await mcp.call_tool("measure", {"query": "bounding_box"})
+        result = await mcp.call_tool("measure", {})
         return result.content[0].text
 
     text = asyncio.run(_mcp_session(run))
@@ -645,11 +643,11 @@ def test_mcp_snapshot_save_and_restore():
         await mcp.call_tool("save_snapshot", {"name": "v1"})
         await mcp.call_tool("execute", {"code": "result = Box(99, 99, 99)"})
         await mcp.call_tool("restore_snapshot", {"name": "v1"})
-        result = await mcp.call_tool("measure", {"query": "bounding_box"})
+        result = await mcp.call_tool("measure", {})
         return result.content[0].text
 
     data = json.loads(asyncio.run(_mcp_session(run)))
-    assert abs(data["xsize"] - 10) < 0.01
+    assert abs(data["bbox"]["xsize"] - 10) < 0.01
 
 
 @_skip_mcp_on_win
@@ -674,8 +672,8 @@ def test_mcp_volume_and_clearance():
             "show(Box(10, 10, 10), 'a')\n"
             "show(Box(10, 10, 10).move(Location((15, 0, 0))), 'b')"
         )})
-        r_vol = await mcp.call_tool("measure", {"query": "volume", "object_name": "a"})
-        r_cl = await mcp.call_tool("measure", {"query": "clearance", "object_name": "a", "object_name2": "b"})
+        r_vol = await mcp.call_tool("measure", {"object_name": "a"})
+        r_cl = await mcp.call_tool("clearance", {"object_a": "a", "object_b": "b"})
         return r_vol.content[0].text, r_cl.content[0].text
 
     vol_json, cl_json = asyncio.run(_mcp_session(run))
@@ -691,12 +689,12 @@ def test_mcp_show_and_measure_named_object():
             "execute",
             {"code": "from build123d import *\nshow(Box(40, 5, 5), 'wide')\nshow(Box(5, 5, 40), 'tall')"},
         )
-        r_wide = await mcp.call_tool("measure", {"query": "bounding_box", "object_name": "wide"})
-        r_tall = await mcp.call_tool("measure", {"query": "bounding_box", "object_name": "tall"})
+        r_wide = await mcp.call_tool("measure", {"object_name": "wide"})
+        r_tall = await mcp.call_tool("measure", {"object_name": "tall"})
         return r_wide.content[0].text, r_tall.content[0].text
 
     wide_json, tall_json = asyncio.run(_mcp_session(run))
     wide = json.loads(wide_json)
     tall = json.loads(tall_json)
-    assert abs(wide["xsize"] - 40) < 0.01
-    assert abs(tall["zsize"] - 40) < 0.01
+    assert abs(wide["bbox"]["xsize"] - 40) < 0.01
+    assert abs(tall["bbox"]["zsize"] - 40) < 0.01

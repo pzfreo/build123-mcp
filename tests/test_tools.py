@@ -156,6 +156,58 @@ def test_blocked_import_does_not_corrupt_shape(session):
     assert session.current_shape is shape_before
 
 
+# --- OCP import allowlist ---
+
+def test_ocp_safe_module_allowed(session):
+    result = execute_code(session, "from OCP.BRepGProp import BRepGProp")
+    assert "not allowed" not in result.lower() and "Error" not in result
+
+
+def test_ocp_topology_modules_allowed(session):
+    result = execute_code(session, (
+        "from OCP.TopExp import TopExp_Explorer\n"
+        "from OCP.TopAbs import TopAbs_FACE\n"
+        "from OCP.TopoDS import TopoDS"
+    ))
+    assert "not allowed" not in result.lower() and "Error" not in result
+
+
+def test_ocp_gp_module_allowed(session):
+    result = execute_code(session, "from OCP.gp import gp_Pnt\np = gp_Pnt(1.0, 2.0, 3.0)")
+    assert "Error" not in result
+
+
+def test_ocp_step_control_blocked(session):
+    result = execute_code(session, "from OCP.STEPControl import STEPControl_Reader")
+    assert "not allowed" in result.lower() or "blocked" in result.lower()
+
+
+def test_ocp_iges_control_blocked(session):
+    result = execute_code(session, "import OCP.IGESControl")
+    assert "not allowed" in result.lower() or "blocked" in result.lower()
+
+
+def test_ocp_osd_blocked(session):
+    result = execute_code(session, "from OCP.OSD import OSD_File")
+    assert "not allowed" in result.lower() or "blocked" in result.lower()
+
+
+def test_ocp_brep_gprop_computes_volume(session):
+    # Full round-trip: build shape, extract .wrapped, compute volume via OCP directly
+    code = (
+        "from build123d import Box\n"
+        "from OCP.BRepGProp import BRepGProp\n"
+        "from OCP.GProp import GProp_GProps\n"
+        "b = Box(10, 10, 10)\n"
+        "props = GProp_GProps()\n"
+        "BRepGProp.VolumeProperties_s(b.wrapped, props)\n"
+        "result_volume = props.Mass()\n"
+    )
+    result = execute_code(session, code)
+    assert "Error" not in result
+    assert abs(session.namespace.get("result_volume", 0) - 1000) < 1
+
+
 def test_runtime_error_does_not_update_current_shape(session):
     execute_code(session, "result = Box(10, 10, 10)")
     shape_before = session.current_shape
@@ -270,61 +322,45 @@ def test_render_view_save_to_both_writes_two_files(session, tmp_path, monkeypatc
 
 def test_measure_bounding_box(session):
     execute_code(session, "result = Box(10, 20, 30)")
-    data = json.loads(measure(session, "bounding_box"))
-    assert abs(data["xsize"] - 10) < 0.01
-    assert abs(data["ysize"] - 20) < 0.01
-    assert abs(data["zsize"] - 30) < 0.01
+    data = json.loads(measure(session))
+    assert abs(data["bbox"]["xsize"] - 10) < 0.01
+    assert abs(data["bbox"]["ysize"] - 20) < 0.01
+    assert abs(data["bbox"]["zsize"] - 30) < 0.01
 
 
 def test_measure_center_origin(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    data = json.loads(measure(session, "bounding_box"))
-    center = data["center"]
+    data = json.loads(measure(session))
+    center = data["bbox"]["center"]
     assert abs(center["x"]) < 0.01
     assert abs(center["y"]) < 0.01
     assert abs(center["z"]) < 0.01
 
 
-def test_measure_invalid_query(session):
-    execute_code(session, "result = Box(10, 10, 10)")
-    with pytest.raises(ValueError, match="Unknown query"):
-        measure(session, "surface_area")
-
-
 def test_measure_volume(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    data = json.loads(measure(session, "volume"))
+    data = json.loads(measure(session))
     assert abs(data["volume"] - 1000) < 0.1
 
 
 def test_measure_area(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    data = json.loads(measure(session, "area"))
+    data = json.loads(measure(session))
     assert abs(data["area"] - 600) < 0.1
 
 
-def test_measure_min_wall_thickness(session):
-    execute_code(session, "result = Box(20, 20, 4)")
-    data = json.loads(measure(session, "min_wall_thickness"))
-    assert abs(data["min_wall_thickness"] - 4) < 0.1
-
-
 def test_measure_clearance(session):
+    from build123d_mcp.tools.measure import clearance
     execute_code(session, "show(Box(10,10,10), 'a')\nshow(Box(10,10,10).move(Location((20,0,0))), 'b')")
-    data = json.loads(measure(session, "clearance", "a", "b"))
+    data = json.loads(clearance(session, "a", "b"))
     assert abs(data["clearance"] - 10) < 0.1
 
 
-def test_measure_clearance_missing_object2_raises(session):
-    execute_code(session, "show(Box(10,10,10), 'a')")
-    with pytest.raises(ValueError, match="object_name2"):
-        measure(session, "clearance", "a")
-
-
-def test_measure_clearance_unknown_object2_raises(session):
+def test_clearance_unknown_object_raises(session):
+    from build123d_mcp.tools.measure import clearance
     execute_code(session, "show(Box(10,10,10), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
-        measure(session, "clearance", "a", "missing")
+        clearance(session, "a", "missing")
 
 
 # --- export ---
@@ -473,14 +509,14 @@ def test_render_view_unknown_object_raises(session):
 
 def test_measure_named_object(session):
     execute_code(session, "show(Box(30, 10, 10), 'wide')")
-    data = json.loads(measure(session, "bounding_box", "wide"))
-    assert abs(data["xsize"] - 30) < 0.01
+    data = json.loads(measure(session, "wide"))
+    assert abs(data["bbox"]["xsize"] - 30) < 0.01
 
 
 def test_measure_unknown_object_raises(session):
     execute_code(session, "show(Box(5, 5, 5), 'a')")
     with pytest.raises(ValueError, match="Unknown object"):
-        measure(session, "bounding_box", "missing")
+        measure(session, "missing")
 
 
 def test_export_named_object(session, tmp_path, monkeypatch):
@@ -630,27 +666,26 @@ def test_interference_unknown_object_raises(session):
         interference(session, "a", "missing")
 
 
-# --- measure topology (new) ---
+# --- measure topology ---
 
 def test_measure_topology_box(session):
     execute_code(session, "result = Box(10, 10, 10)")
-    data = json.loads(measure(session, "topology"))
-    assert data["faces"] == 6
-    assert data["edges"] == 12
-    assert data["vertices"] == 8
+    data = json.loads(measure(session))
+    assert data["topology"]["faces"] == 6
+    assert data["topology"]["edges"] == 12
+    assert data["topology"]["vertices"] == 8
 
 
 def test_measure_topology_increases_after_boolean_cut(session):
-    # A box with a cylindrical hole punched through has more than 6 faces
     execute_code(session, "result = Box(20, 20, 20) - Cylinder(3, 30)")
-    data = json.loads(measure(session, "topology"))
-    assert data["faces"] > 6
+    data = json.loads(measure(session))
+    assert data["topology"]["faces"] > 6
 
 
 def test_measure_topology_named_object(session):
     execute_code(session, "show(Box(10, 10, 10), 'cube')")
-    data = json.loads(measure(session, "topology", "cube"))
-    assert data["faces"] == 6
+    data = json.loads(measure(session, "cube"))
+    assert data["topology"]["faces"] == 6
 
 
 # --- render_view azimuth/elevation (new) ---
@@ -735,6 +770,54 @@ def test_show_prints_volume_and_faces(session):
 def test_show_prints_feedback_without_name(session):
     output = execute_code(session, "show(Box(5, 5, 5))")
     assert "Registered" in output
+
+
+# --- face() helper ---
+
+def test_face_top_returns_highest_z(session):
+    execute_code(session, "from build123d import *\nb = Box(10, 10, 10)\nt = named_face(b, 'top')")
+    # Top face center should be at z = +5
+    top = session.namespace["t"]
+    assert abs(top.center_location.position.Z - 5) < 0.1
+
+
+def test_face_bottom_returns_lowest_z(session):
+    execute_code(session, "from build123d import *\nb = Box(10, 10, 10)\nt = named_face(b, 'bottom')")
+    bottom = session.namespace["t"]
+    assert abs(bottom.center_location.position.Z + 5) < 0.1
+
+
+def test_face_all_names_work(session):
+    code = (
+        "from build123d import *\n"
+        "b = Box(10, 20, 30)\n"
+        "top = named_face(b, 'top')\n"
+        "bottom = named_face(b, 'bottom')\n"
+        "front = named_face(b, 'front')\n"
+        "back = named_face(b, 'back')\n"
+        "right = named_face(b, 'right')\n"
+        "left = named_face(b, 'left')\n"
+    )
+    result = execute_code(session, code)
+    assert "Error" not in result
+
+
+def test_face_unknown_name_raises(session):
+    result = execute_code(session, "from build123d import *\nb = Box(10,10,10)\nnamed_face(b, 'diagonal')")
+    assert "Error" in result and "diagonal" in result
+
+
+def test_face_survives_rollback(session):
+    # face() should still be available after a failed execute()
+    execute_code(session, "raise ValueError('oops')")
+    result = execute_code(session, "from build123d import *\nb = Box(5,5,5)\nt = named_face(b, 'top')")
+    assert "Error" not in result
+
+
+def test_face_available_without_import(session):
+    # face() is a session built-in — no import needed
+    result = execute_code(session, "from build123d import Box\nb = Box(10,10,10)\nt = named_face(b, 'top')")
+    assert "Error" not in result
 
 
 # --- list_objects (new) ---
@@ -909,6 +992,153 @@ def test_diff_snapshot_json_format(session):
     assert data["a"]["label"] == "s1"
     assert data["b"]["label"] == "current"
     assert data["b"]["current_shape"]["volume"] > data["a"]["current_shape"]["volume"]
+
+
+# --- measure extended fields (center_of_mass, inertia, face_inventory) ---
+
+def test_measure_center_of_mass_symmetric_box(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(measure(session))
+    com = data["center_of_mass"]
+    assert abs(com["x"]) < 0.01
+    assert abs(com["y"]) < 0.01
+    assert abs(com["z"]) < 0.01
+
+
+def test_measure_center_of_mass_offset_box(session):
+    execute_code(session, "result = Box(10, 10, 10).move(Location((5, 5, 5)))")
+    data = json.loads(measure(session))
+    com = data["center_of_mass"]
+    assert abs(com["x"] - 5) < 0.1
+    assert abs(com["y"] - 5) < 0.1
+    assert abs(com["z"] - 5) < 0.1
+
+
+def test_measure_inertia_returns_six_components(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(measure(session))
+    inertia = data["inertia"]
+    for key in ("Ixx", "Iyy", "Izz", "Ixy", "Ixz", "Iyz"):
+        assert key in inertia
+    assert abs(inertia["Ixx"] - inertia["Iyy"]) < 1.0
+    assert abs(inertia["Ixx"] - inertia["Izz"]) < 1.0
+    assert abs(inertia["Ixy"]) < 1.0
+
+
+def test_measure_inertia_differs_for_different_shapes(session):
+    execute_code(session, "show(Box(10,10,10), 'cube')\nshow(Cylinder(5, 20), 'cyl')")
+    cube_data = json.loads(measure(session, "cube"))
+    cyl_data = json.loads(measure(session, "cyl"))
+    assert abs(cube_data["inertia"]["Ixx"] - cyl_data["inertia"]["Ixx"]) > 1.0
+
+
+def test_measure_face_inventory_box(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(measure(session))
+    fi = data["face_inventory"]
+    assert isinstance(fi, list)
+    assert len(fi) == 6
+    assert all(f["type"] == "Plane" for f in fi)
+    assert all(abs(f["area"] - 100) < 1 for f in fi)
+
+
+def test_measure_face_inventory_cylinder(session):
+    execute_code(session, "result = Cylinder(5, 10)")
+    data = json.loads(measure(session))
+    fi = data["face_inventory"]
+    types = [f["type"] for f in fi]
+    assert "Cylinder" in types
+    assert "Plane" in types
+    cyl_faces = [f for f in fi if f["type"] == "Cylinder"]
+    assert len(cyl_faces) == 1
+    assert abs(cyl_faces[0]["diameter"] - 10) < 0.1
+
+
+# --- cross_sections ---
+
+def test_cross_sections_box(session):
+    from build123d_mcp.tools.cross_sections import cross_sections
+    execute_code(session, "result = Box(10, 10, 10)")
+    data = json.loads(cross_sections(session, axis="Z", num_slices=5))
+    assert isinstance(data, list)
+    assert len(data) == 5
+    for s in data:
+        assert "position" in s and "area" in s
+        assert abs(s["area"] - 100) < 2.0
+
+
+def test_cross_sections_named_object(session):
+    from build123d_mcp.tools.cross_sections import cross_sections
+    execute_code(session, "show(Box(20, 10, 10), 'wide')")
+    data = json.loads(cross_sections(session, "wide", axis="X", num_slices=4))
+    assert len(data) == 4
+    for s in data:
+        assert abs(s["area"] - 100) < 2.0
+
+
+# --- import_cad_file ---
+
+def test_import_step_round_trip(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(10, 10, 10)")
+    export_file(session, "ref", "step")
+    step_path = str(tmp_path / "ref.step")
+    data = json.loads(import_cad_file(session, step_path, "reference"))
+    assert data["imported"] == "reference"
+    assert data["format"] == "step"
+    assert abs(data["volume"] - 1000) < 1
+    assert data["faces"] == 6
+    assert "reference" in session.objects
+
+
+def test_import_step_default_name_from_filename(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(5, 5, 5)")
+    export_file(session, "mypart", "step")
+    step_path = str(tmp_path / "mypart.step")
+    data = json.loads(import_cad_file(session, step_path))
+    assert data["imported"] == "mypart"
+    assert "mypart" in session.objects
+
+
+def test_import_stl_round_trip(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(10, 10, 10)")
+    export_file(session, "ref", "stl")
+    stl_path = str(tmp_path / "ref.stl")
+    data = json.loads(import_cad_file(session, stl_path, "ref_stl"))
+    assert data["imported"] == "ref_stl"
+    assert data["format"] == "stl"
+    # STL is a triangulated mesh face — volume=0 is expected; check bbox instead
+    assert data["bbox"]["xsize"] > 0
+    assert "ref_stl" in session.objects
+
+
+def test_import_cad_file_missing_file_raises(session):
+    from build123d_mcp.tools.import_step import import_cad_file
+    with pytest.raises(ValueError, match="File not found"):
+        import_cad_file(session, "/nonexistent/path/to/file.step")
+
+
+def test_import_cad_file_wrong_extension_raises(session, tmp_path):
+    from build123d_mcp.tools.import_step import import_cad_file
+    bad = tmp_path / "file.obj"
+    bad.write_text("dummy")
+    with pytest.raises(ValueError, match="Expected a .step"):
+        import_cad_file(session, str(bad))
+
+
+def test_import_step_becomes_current_shape(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(10, 10, 10)")
+    export_file(session, "shape", "step")
+    import_cad_file(session, str(tmp_path / "shape.step"), "imported")
+    assert session.current_shape is not None
+    assert "imported" in session.objects
 
 
 # --- health_check ---

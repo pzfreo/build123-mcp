@@ -14,7 +14,7 @@ _has_library = False
 
 @mcp.tool()
 def execute(code: str) -> str:
-    """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects (name defaults to 'shape'); show() immediately prints volume and face count confirming the shape is non-empty. After any boolean operation (-, +, &) call measure(topology) or measure(volume) to confirm it succeeded before calling render_view."""
+    """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects (name defaults to 'shape'); show() immediately prints volume and face count confirming the shape is non-empty. After any boolean operation (-, +, &) call measure(topology) or measure(volume) to confirm it succeeded before calling render_view. named_face(shape, name) is available as a built-in helper: named_face(box, 'top') returns the highest-Z face, named_face(box, 'bottom'/'front'/'back'/'left'/'right') returns the corresponding face by axis — useful for placing geometry relative to a shape without computing coordinates. (Named 'named_face' not 'face' to avoid shadowing build123d's own face() export.)"""
     return _session.execute(code)
 
 
@@ -52,9 +52,21 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
 
 
 @mcp.tool()
-def measure(query: str = "bounding_box", object_name: str = "", object_name2: str = "") -> str:
-    """Query geometry of a shape. Prefer measure over render_view when verifying geometry — numbers are unambiguous. query: bounding_box, volume, area, min_wall_thickness, clearance, topology, summary. summary returns bbox + volume + area + topology + center in one call — use it to orient quickly. topology (face/edge/vertex counts) is the fastest way to confirm a boolean operation succeeded: a cut that failed leaves the counts unchanged. object_name/object_name2: named objects from show() (clearance requires both)."""
-    return _session.measure(query, object_name, object_name2)
+def measure(object_name: str = "") -> str:
+    """Measure a shape and return a complete geometric summary: volume (mm³), surface area (mm²), topology (face/edge/vertex counts), bounding box with per-axis size and center, volumetric center of mass, 6-component inertia tensor (Ixx/Iyy/Izz/Ixy/Ixz/Iyz), and a face-type inventory classifying every face as Plane/Cylinder/Cone/Sphere/Torus/BSpline with area and type-specific params (e.g. cylinder diameter and axis). Prefer measure over render_view for verifying geometry — numbers are unambiguous. topology is the fastest confirmation that a boolean operation succeeded: a failed cut leaves face/edge/vertex counts unchanged. object_name: named object from show() (default: current shape)."""
+    return _session.measure(object_name)
+
+
+@mcp.tool()
+def clearance(object_a: str, object_b: str) -> str:
+    """Return the minimum distance (mm) between two named shapes registered via show(). A result of 0 means the shapes are touching or overlapping — use interference() to check for overlap. object_a, object_b: names from show()."""
+    return _session.clearance(object_a, object_b)
+
+
+@mcp.tool()
+def cross_sections(object_name: str = "", axis: str = "Z", num_slices: int = 10) -> str:
+    """Compute cross-sectional areas at evenly spaced planes along an axis. Returns a list of {position, area} pairs. axis: X, Y, or Z (default Z). num_slices: number of planes (default 10, minimum 2). Useful for detecting internal voids, wall-thickness variation, or verifying that a shape's cross-section profile matches a reference. object_name: named object from show() (default: current shape)."""
+    return _session.cross_sections(object_name, axis, num_slices)
 
 
 @mcp.tool()
@@ -146,6 +158,12 @@ def shape_compare(object_a: str, object_b: str) -> str:
 
 
 @mcp.tool()
+def import_cad_file(path: str, name: str = "") -> str:
+    """Import a STEP (.step/.stp) or STL (.stl) file as a named object in the session. path: absolute or relative path to the file. name: name to register the shape under (defaults to the filename stem). The shape becomes both the named object and the current_shape. Returns volume, topology, and bounding box of the imported shape. Use this to load reference geometry for comparison with show() objects via shape_compare() or measure()."""
+    return _session.import_cad_file(path, name)
+
+
+@mcp.tool()
 def repair_hints(error_text: str) -> str:
     """Given an error message from execute(), return targeted fix suggestions for common build123d mistakes: wrong Location syntax, missing .part, CadQuery idioms, blocked imports, degenerate boolean results, fillet edge selection, and more. Pass the full error string from execute() or last_error()."""
     from build123d_mcp.tools.repair_hints import repair_hints as _repair_hints
@@ -182,9 +200,9 @@ BUILD123D-MCP WORKFLOW GUIDE
    Recommended order: execute → measure → render_view (if you need to see it).
 
 3. VERIFY BOOLEAN OPERATIONS WITH TOPOLOGY
-   After any cut, union, or intersection, call measure(topology) on the result.
+   After any cut, union, or intersection, call measure() and check topology.faces.
    A successful boolean changes face/edge/vertex counts; a failed one leaves them unchanged.
-   measure(volume) confirms the magnitude of the change.
+   measure().volume confirms the magnitude of the change.
 
 4. MEASURE THE OBJECT IN QUESTION — NOT A PROXY
    When debugging, call measure() on the actual disputed object.
@@ -235,7 +253,9 @@ MCP client configuration example:
 Available tools:
   execute           Run build123d Python code in the persistent session
   render_view       Render model as PNG (direction, azimuth, elevation, clip_plane, clip_at, save_to)
-  measure           Query geometry: bounding_box, volume, area, topology, min_wall_thickness, clearance
+  measure           Full geometric summary: volume, area, topology, bbox, center_of_mass, inertia, face_inventory
+  clearance         Minimum distance between two named shapes
+  cross_sections    Cross-sectional areas along X/Y/Z axis at evenly-spaced planes
   export            Export model to STEP or STL
   interference      Check intersection volume between two named shapes
   list_objects      List all named shapes with volume, faces, edges, vertices
@@ -249,6 +269,7 @@ Available tools:
   last_error        Details of the last failed execute() (type, message, line, excerpt)
   validate_code     Check code for syntax/security errors before executing
   shape_compare     Compare two named shapes by geometry metrics
+  import_cad_file   Import a STEP or STL file as a named object for comparison
   repair_hints      Get fix suggestions for a given execute() error message
   version           Return the server version string
   workflow_hints    Return guidance on using these tools effectively

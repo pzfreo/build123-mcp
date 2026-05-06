@@ -65,6 +65,85 @@ IMPORT_ALLOWLIST = frozenset({
     "contextlib",
 })
 
+# OCP (OpenCASCADE Python bindings) sub-modules that are safe to import.
+# These are purely geometric — no filesystem, no OS, no network access.
+# Blocked: STEPControl, IGESControl, OSD, Storage, PCDM, TDocStd, Interface,
+#          IFSelect, XCAFDoc, Resource — all of which expose file I/O.
+OCP_ALLOWLIST = frozenset({
+    # Geometric primitives
+    "OCP.gp",
+    # Topology
+    "OCP.TopAbs",
+    "OCP.TopExp",
+    "OCP.TopLoc",
+    "OCP.TopTools",
+    "OCP.TopoDS",
+    # B-rep core
+    "OCP.BRep",
+    "OCP.BRepTools",
+    "OCP.BRepLib",
+    # B-rep analysis
+    "OCP.BRepAdaptor",
+    "OCP.BRepBndLib",
+    "OCP.BRepCheck",
+    "OCP.BRepClass",
+    "OCP.BRepClass3d",
+    "OCP.BRepExtrema",
+    "OCP.BRepGProp",
+    "OCP.BRepIntCurveSurface",
+    # B-rep construction
+    "OCP.BRepBuilderAPI",
+    "OCP.BRepPrimAPI",
+    "OCP.BRepFeat",
+    "OCP.BRepFilletAPI",
+    "OCP.BRepOffsetAPI",
+    "OCP.BRepSweep",
+    "OCP.BRepProj",
+    # B-rep operations
+    "OCP.BRepAlgoAPI",
+    "OCP.BRepMesh",
+    # Geometry
+    "OCP.Geom",
+    "OCP.Geom2d",
+    "OCP.GeomAbs",
+    "OCP.GeomAPI",
+    "OCP.GeomAdaptor",
+    "OCP.GeomConvert",
+    "OCP.GeomFill",
+    "OCP.GeomLProp",
+    "OCP.GeomProjLib",
+    "OCP.GeomTools",
+    # Adaptors
+    "OCP.Adaptor2d",
+    "OCP.Adaptor3d",
+    # Properties and analysis
+    "OCP.GProp",
+    "OCP.GCPnts",
+    "OCP.Bnd",
+    "OCP.IntCurvesFace",
+    "OCP.IntTools",
+    "OCP.Extrema",
+    # Mesh / polygon
+    "OCP.Poly",
+    # Shape analysis and repair
+    "OCP.ShapeAnalysis",
+    "OCP.ShapeCustom",
+    "OCP.ShapeExtend",
+    "OCP.ShapeFix",
+    "OCP.ShapeUpgrade",
+    # Collection types
+    "OCP.TColgp",
+    "OCP.TColGeom",
+    "OCP.TColStd",
+    "OCP.TCollection",
+    # Misc safe
+    "OCP.MAT",
+    "OCP.Approx",
+    "OCP.Convert",
+    "OCP.BSpl",
+    "OCP.ProjLib",
+})
+
 # When True, import checks are skipped entirely.  Set via --allow-all-imports.
 ALLOW_ALL_IMPORTS: bool = False
 
@@ -127,7 +206,18 @@ def check_ast(code: str) -> None:
 
 
 def _check_module(dotted_name: str) -> None:
-    root = dotted_name.split(".")[0]
+    parts = dotted_name.split(".")
+    root = parts[0]
+    if root == "OCP":
+        if len(parts) >= 2:
+            ocp_sub = f"OCP.{parts[1]}"
+            if ocp_sub not in OCP_ALLOWLIST:
+                raise ValueError(
+                    f"Import of '{dotted_name}' is not allowed. "
+                    f"This OCP sub-module is blocked (potential file I/O or OS access). "
+                    f"Permitted OCP modules: {sorted(OCP_ALLOWLIST)}"
+                )
+        return  # bare 'OCP' or allowed sub-module
     if root not in IMPORT_ALLOWLIST:
         raise ValueError(
             f"Import of '{dotted_name}' is not allowed. "
@@ -162,8 +252,18 @@ def make_restricted_builtins() -> dict[str, Any]:
         return safe
 
     def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        root = name.split(".")[0]
-        if root not in IMPORT_ALLOWLIST:
+        parts = name.split(".")
+        root = parts[0]
+        if root == "OCP":
+            if len(parts) >= 2:
+                ocp_sub = f"OCP.{parts[1]}"
+                if ocp_sub not in OCP_ALLOWLIST:
+                    raise ImportError(
+                        f"Import of '{name}' is not allowed. "
+                        f"This OCP sub-module is blocked (potential file I/O or OS access). "
+                        f"Permitted OCP modules: {sorted(OCP_ALLOWLIST)}"
+                    )
+        elif root not in IMPORT_ALLOWLIST:
             raise ImportError(
                 f"Import of '{name}' is not allowed. "
                 f"Permitted: {sorted(IMPORT_ALLOWLIST)}"
