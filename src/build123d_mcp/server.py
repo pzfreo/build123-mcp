@@ -220,118 +220,12 @@ BUILD123D-MCP WORKFLOW GUIDE
 """
 
 
-_QUICKREF = """\
-BUILD123D QUICK REFERENCE — all measurements in mm
-====================================================
-
-## Pattern 1: direct shape algebra (simplest)
-from build123d import *
-result = Box(20, 10, 5)
-result = result - Cylinder(3, 6).move(Location((0, 0, 0)))
-show(result, "part")
-
-## Pattern 2: BuildPart context manager (required for extrude/revolve/loft/fillet)
-from build123d import *
-with BuildPart() as p:
-    Box(20, 10, 5)
-    Cylinder(3, 6, mode=Mode.SUBTRACT)   # cut hole
-result = p.part
-show(result, "part")
-
-## Primitives
-Box(length, width, height)              # centred at origin
-Cylinder(radius, height)
-Sphere(radius)
-Cone(bottom_radius, top_radius, height)
-Torus(major_radius, minor_radius)
-
-## Boolean operators (direct algebra)
-a + b    # union
-a - b    # cut b from a
-a & b    # intersection
-
-## Boolean modes (inside BuildPart)
-mode=Mode.ADD        # default — union with existing solid
-mode=Mode.SUBTRACT   # cut from existing solid
-mode=Mode.INTERSECT  # keep overlap only
-mode=Mode.REPLACE    # replace current solid entirely
-
-## Positioning
-# Alignment (corner vs centred)
-Box(10, 5, 3, align=(Align.MIN, Align.MIN, Align.MIN))        # corner at origin
-Box(10, 5, 3, align=(Align.CENTER, Align.CENTER, Align.MIN))  # centred XY, bottom at Z=0
-
-# Translate (and optionally rotate)
-shape.move(Location((x, y, z)))
-shape.move(Location((x, y, z), (rx_deg, ry_deg, rz_deg)))
-
-# Place multiple instances inside BuildPart
-with Locations((5, 0, 0), (-5, 0, 0)):
-    Cylinder(2, 10, mode=Mode.SUBTRACT)
-with GridLocations(x_spacing, y_spacing, x_count, y_count):
-    Cylinder(2, 10, mode=Mode.SUBTRACT)
-with PolarLocations(radius, count):
-    Cylinder(2, 10, mode=Mode.SUBTRACT)
-
-## Sketch → solid (requires BuildPart)
-# Extrude
-with BuildPart() as p:
-    with BuildSketch() as sk:            # default plane: XY
-        Circle(10)
-        Rectangle(6, 6, mode=Mode.SUBTRACT)   # cutout in sketch
-    extrude(amount=15)
-
-# Revolve — profile in Plane.XZ, offset from axis
-with BuildPart() as p:
-    with BuildSketch(Plane.XZ) as sk:
-        with Locations((12, 0)):
-            Rectangle(4, 8)
-    revolve(axis=Axis.Z)                 # full 360°
-
-# Loft between two profiles
-with BuildPart() as p:
-    with BuildSketch(Plane.XY) as s1:
-        Rectangle(10, 10)
-    with BuildSketch(Plane.XY.offset(15)) as s2:
-        Circle(4)
-    loft()
-
-## Selecting edges and faces
-result.faces().sort_by(Axis.Z)[-1]       # highest-Z face (top)
-result.faces().sort_by(Axis.Z)[0]        # lowest-Z face (bottom)
-result.edges().sort_by(Axis.Z)[-4:]      # 4 edges at highest Z (for fillet)
-result.edges().filter_by(Axis.Z)         # edges parallel to Z
-result.faces().filter_by(GeomType.PLANE) # planar faces only
-
-## Fillets and chamfers (inside BuildPart only)
-with BuildPart() as p:
-    Box(20, 10, 5)
-    fillet(p.part.edges().sort_by(Axis.Z)[-4:], radius=1)
-
-with BuildPart() as p:
-    Box(20, 10, 5)
-    chamfer(p.part.edges().sort_by(Axis.Z)[-4:], length=0.5)
-
-## MCP server conventions
-- Name the final shape 'result' OR call show() — both trigger current_shape auto-detection
-- show(shape, "name")      registers object, prints vol + face count as immediate confirmation
-- named_face(shape, "top") returns the highest-Z face; also: bottom/front/back/left/right
-
-## Common gotchas
-- After every -, +, & : call measure() and check topology.faces — a failed boolean leaves counts unchanged
-- fillet/chamfer radius too large → OCC kernel exception; reduce radius or select fewer edges
-- Cylinder/Sphere are centred at origin; use .move() or align= to reposition
-- Locations() inside BuildPart shifts the construction origin — it does NOT move the whole part
-- Pass p.part (the Shape) to show(), not p (the BuildPart context)
-- revolve() needs the profile offset from the revolution axis — a profile touching the axis produces a solid, one crossing it fails
-"""
-
-
 @mcp.resource("build123d://quickref", mime_type="text/plain",
               description="build123d API quick reference: primitives, booleans, positioning, sketch-to-3D, selectors, fillets.")
 def build123d_quickref() -> str:
     """build123d API quick reference."""
-    return _QUICKREF
+    from build123d_mcp.quickref import build_quickref_text
+    return build_quickref_text()
 
 
 @mcp.prompt(
