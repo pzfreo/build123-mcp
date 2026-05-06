@@ -83,10 +83,6 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from build123d_mcp.tools.cross_sections import cross_sections
         return cross_sections(session, **args)
 
-    if op == "list_objects":
-        from build123d_mcp.tools.list_objects import list_objects
-        return list_objects(session)
-
     if op == "save_snapshot":
         name = args["name"]
         session.save_snapshot(name)
@@ -283,9 +279,6 @@ class WorkerSession:
             {"object_name": object_name, "axis": axis, "num_slices": num_slices},
             self._SHORT_TIMEOUT,
         )
-
-    def list_objects(self) -> str:
-        return self._call("list_objects", {}, self._SHORT_TIMEOUT)
 
     def save_snapshot(self, name: str) -> str:
         return self._call("save_snapshot", {"name": name}, self._SHORT_TIMEOUT)

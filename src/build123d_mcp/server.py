@@ -14,8 +14,9 @@ _has_library = False
 
 @mcp.tool()
 def execute(code: str) -> str:
-    """Execute build123d Python code in the persistent session. Use show(shape, name) to register named objects (name defaults to 'shape'); show() immediately prints volume and face count confirming the shape is non-empty. After any boolean operation (-, +, &) call measure(topology) or measure(volume) to confirm it succeeded before calling render_view. named_face(shape, name) is available as a built-in helper: named_face(box, 'top') returns the highest-Z face, named_face(box, 'bottom'/'front'/'back'/'left'/'right') returns the corresponding face by axis — useful for placing geometry relative to a shape without computing coordinates. (Named 'named_face' not 'face' to avoid shadowing build123d's own face() export.)"""
-    return _session.execute(code)
+    """Execute build123d Python code in the persistent session. Errors include automatic fix hints — read them before retrying. Use show(shape, name) to register named objects (name defaults to 'shape'); show() immediately prints volume and face count confirming the shape is non-empty. After any boolean operation (-, +, &) call measure() to confirm it succeeded (check topology.faces). named_face(shape, name) is a built-in helper: named_face(box, 'top') returns the highest-Z face, 'bottom'/'front'/'back'/'left'/'right' work similarly."""
+    from build123d_mcp.tools.execute import execute_code
+    return execute_code(_session, code)
 
 
 @mcp.tool()
@@ -98,12 +99,6 @@ def load_part(name: str, params: str = "") -> str:
 
 
 @mcp.tool()
-def list_objects() -> str:
-    """List all named shapes registered via show(), each with volume (mm³), face, edge, and vertex counts. Call this to audit session state without guessing what show() has been called on."""
-    return _session.list_objects()
-
-
-@mcp.tool()
 def save_snapshot(name: str) -> str:
     """Save a named checkpoint of the current geometric state (current_shape and the show() object registry).
     The Python variable namespace is NOT saved — only geometry. Call this before risky experiments so you can
@@ -128,7 +123,7 @@ def diff_snapshot(snapshot_a: str, snapshot_b: str = "", format: str = "text") -
 
 @mcp.tool()
 def session_state() -> str:
-    """Return a structured JSON snapshot of the current session: current_shape metrics, all named objects with geometry stats, snapshot names, and a variables summary of the Python namespace (type + volume for shapes, type + length for collections, type + value for scalars). Use this to orient after a reset, restore, or multi-step build to confirm what geometry and variables are active."""
+    """Return a structured JSON snapshot of the current session: current_shape metrics, all named objects (replaces list_objects) with geometry stats, snapshot names, and a variables summary of the Python namespace (type + volume for shapes, type + length for collections, type + value for scalars). Use this to orient after a reset, restore, or multi-step build to confirm what geometry and variables are active."""
     return _session.session_state()
 
 
@@ -142,13 +137,6 @@ def health_check() -> str:
 def reset() -> str:
     """Clear the current session back to empty state, including all snapshots."""
     return _session.reset()
-
-
-@mcp.tool()
-def validate_code(code: str) -> str:
-    """Check build123d code for syntax errors, blocked imports/calls, and common omissions before executing. Returns {syntax, blocked, warnings, ok}. blocked items prevent execution; warnings are advisory (e.g. no build123d import in this snippet, no result/show() call). Use this before a long generated script to catch obvious problems without burning a session execute()."""
-    from build123d_mcp.tools.validate_code import validate_code as _validate_code
-    return _validate_code(code)
 
 
 @mcp.tool()
@@ -213,6 +201,7 @@ BUILD123D-MCP WORKFLOW GUIDE
    Use show(shape, "name") after creating important geometry — it also sets current_shape.
    The execute() output immediately confirms name, volume, and face count.
    Call session_state() for a full JSON view of all active shapes, objects, and snapshots.
+   session_state() includes the named-object list — no separate list_objects() call needed.
 
 6. CHECKPOINT BEFORE EXPERIMENTS
    Call save_snapshot("name") before any operation you might want to undo.
@@ -251,15 +240,14 @@ MCP client configuration example:
   }
 
 Available tools:
-  execute           Run build123d Python code in the persistent session
+  execute           Run build123d Python code; errors include automatic fix hints
   render_view       Render model as PNG (direction, azimuth, elevation, clip_plane, clip_at, save_to)
   measure           Full geometric summary: volume, area, topology, bbox, center_of_mass, inertia, face_inventory
   clearance         Minimum distance between two named shapes
   cross_sections    Cross-sectional areas along X/Y/Z axis at evenly-spaced planes
   export            Export model to STEP or STL
   interference      Check intersection volume between two named shapes
-  list_objects      List all named shapes with volume, faces, edges, vertices
-  session_state     Full session JSON: current_shape, all objects, snapshot names
+  session_state     Full session JSON: current_shape, all named objects, snapshot names, variables
   health_check      Verify VTK/SVG/STEP/STL dependencies work end-to-end
   search_library    Search the part library by keyword (requires --library)
   load_part         Load a named part with optional parameter overrides (requires --library)
@@ -267,10 +255,9 @@ Available tools:
   restore_snapshot  Restore geometry from a named checkpoint
   diff_snapshot     Compare two snapshots; format="json" for structured output
   last_error        Details of the last failed execute() (type, message, line, excerpt)
-  validate_code     Check code for syntax/security errors before executing
   shape_compare     Compare two named shapes by geometry metrics
   import_cad_file   Import a STEP or STL file as a named object for comparison
-  repair_hints      Get fix suggestions for a given execute() error message
+  repair_hints      Get additional fix suggestions for a given execute() error message
   version           Return the server version string
   workflow_hints    Return guidance on using these tools effectively
   reset             Clear the session (namespace, shapes, snapshots)
