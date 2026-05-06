@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.3.12
+
+### Features
+
+- **`measure()` unified response**: returns a single comprehensive JSON — volume, area, topology (face/edge/vertex counts), bounding box with center, volumetric center of mass, 6-component inertia tensor (Ixx/Iyy/Izz/Ixy/Ixz/Iyz), and face-type inventory classifying every face as Plane/Cylinder/Cone/Sphere/Torus/BSpline with type-specific params (cylinder diameter/axis, cone semi-angle, sphere radius, torus radii). Replaces the old query-dispatch API.
+- **`clearance(object_a, object_b)` tool**: returns the minimum distance (mm) between two named shapes.
+- **`cross_sections(object_name, axis, num_slices)` tool**: cross-sectional area at evenly spaced planes along X/Y/Z — useful for detecting internal voids, wall-thickness variation, and verifying profile against a reference.
+- **`import_cad_file(path, name)` tool**: loads a STEP (.step/.stp) or STL (.stl) file as a named object in the session. Supports multi-body STEP files. Use with `shape_compare()` to verify a procedural build against a reference.
+- **`named_face(shape, name)` session built-in**: returns a face by semantic name (`top`, `bottom`, `front`, `back`, `left`, `right`) based on axis sorting. Available in every `execute()` call without import.
+- **OCP sub-module imports in user code**: geometric OCP modules (`OCP.gp`, `OCP.BRepGProp`, `OCP.TopExp`, `OCP.BRepAlgoAPI`, etc.) are now allowed via an explicit allowlist. File I/O modules (`OCP.STEPControl`, `OCP.IGESControl`, `OCP.OSD`) remain blocked.
+- **`execute()` inline repair hints**: on error, matched hints from the repair library are appended directly to the error response — no separate `repair_hints()` call needed.
+
+### Removed
+
+- **`fingerprint` tool**: data is now part of the `measure()` response; `cross_sections` is a separate tool.
+- **`list_objects` tool**: `session_state()` is a strict superset.
+- **`validate_code` tool**: `execute()` already returns syntax and security errors inline; the standalone pre-check added friction without benefit.
+
+---
+
 ## v0.3.7
 
 ### Features
