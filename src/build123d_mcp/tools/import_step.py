@@ -55,7 +55,7 @@ def _load_step(resolved: str):
             raise ValueError("STEP file contains no geometry")
         shape = shapes[0]
         for s in shapes[1:]:
-            shape = shape + s
+            shape = shape + s  # type: ignore[assignment]
         return shape
     return imported
 
