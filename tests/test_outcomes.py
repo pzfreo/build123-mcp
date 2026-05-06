@@ -554,9 +554,9 @@ def test_mcp_lists_all_tools():
 
     names = asyncio.run(_mcp_session(run))
     assert names == {"execute", "render_view", "measure", "export", "reset",
-                     "save_snapshot", "restore_snapshot", "diff_snapshot", "interference", "list_objects",
+                     "save_snapshot", "restore_snapshot", "diff_snapshot", "interference",
                      "search_library", "load_part", "workflow_hints", "session_state", "health_check",
-                     "version", "last_error", "validate_code", "shape_compare", "repair_hints",
+                     "version", "last_error", "shape_compare", "repair_hints",
                      "import_cad_file", "cross_sections", "clearance"}
 
 

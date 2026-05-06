@@ -59,6 +59,17 @@ def test_execute_error_returns_message(session):
     assert "bad input" in result
 
 
+def test_execute_error_appends_hint_for_known_pattern(session):
+    result = execute_code(session, "import os")
+    assert "Hint:" in result
+    assert "Import blocked" in result or "not allowed" in result.lower()
+
+
+def test_execute_success_has_no_hint(session):
+    result = execute_code(session, "x = 42")
+    assert "Hint:" not in result
+
+
 def test_execute_creates_shape(session):
     execute_code(session, "result = Box(10, 10, 10)")
     assert session.current_shape is not None
