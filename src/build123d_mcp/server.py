@@ -334,6 +334,14 @@ def build123d_quickref() -> str:
     return _QUICKREF
 
 
+@mcp.resource("build123d://session", mime_type="application/json",
+              description="Live session state: current shape diagnostics, named objects, snapshots, and user-defined variables.")
+def build123d_session_state() -> str:
+    """Live session state as JSON."""
+    from build123d_mcp.tools.session_state import session_state
+    return session_state(_session)
+
+
 @mcp.prompt(
     name="start-cad-session",
     description="Prime a new CAD design session with the task description and workflow reminders.",
