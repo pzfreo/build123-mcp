@@ -236,6 +236,14 @@ def build123d_session_state() -> str:
     return session_state(_session)
 
 
+@mcp.resource("build123d://bd_warehouse", mime_type="text/plain",
+              description="Catalogue of pre-built parametric parts in bd_warehouse: bearings, fasteners, gears, pipes, threads, and more.")
+def build123d_bd_warehouse() -> str:
+    """bd_warehouse component catalogue."""
+    from build123d_mcp.bd_warehouse_resource import build_bd_warehouse_text
+    return build_bd_warehouse_text()
+
+
 @mcp.prompt(
     name="start-cad-session",
     description="Prime a new CAD design session with the task description and workflow reminders.",
