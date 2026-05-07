@@ -171,6 +171,16 @@ def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevat
             clipper.Update()
             poly = clipper.GetOutput()
 
+        # Compute vertex normals so Phong shading works on both B-rep tessellations
+        # and imported mesh shells (STL), where face orientations may be inconsistent.
+        normals_filter = vtk.vtkPolyDataNormals()
+        normals_filter.SetInputData(poly)
+        normals_filter.ComputePointNormalsOn()
+        normals_filter.ConsistencyOn()
+        normals_filter.AutoOrientNormalsOn()
+        normals_filter.Update()
+        poly = normals_filter.GetOutput()
+
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputData(poly)
 

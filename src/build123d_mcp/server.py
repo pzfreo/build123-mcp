@@ -147,7 +147,7 @@ def shape_compare(object_a: str, object_b: str) -> str:
 
 @mcp.tool()
 def import_cad_file(path: str, name: str = "") -> str:
-    """Import a STEP (.step/.stp) or STL (.stl) file as a named object in the session. path: absolute or relative path to the file. name: name to register the shape under (defaults to the filename stem). The shape becomes both the named object and the current_shape. Returns volume, topology, and bounding box of the imported shape. Use this to load reference geometry for comparison with show() objects via shape_compare() or measure()."""
+    """Import a STEP (.step/.stp) or STL (.stl) file as a named object in the session. path: absolute or relative path to the file. name: name to register the shape under (defaults to the filename stem). The shape becomes both the named object and the current_shape. Returns volume, topology, and bounding box of the imported shape. After importing, use render_view() to visualise the shape, measure() for geometry queries, or shape_compare() to diff against a show() object. Note: STL imports produce a shell (volume=0) rather than a solid — render_view and measure still work, but interference() and boolean operations require a solid. If you have both the original built shape and an imported copy in session.objects, render the imported one by name (e.g. objects='mypart') to avoid Z-fighting artifacts from two co-located shapes."""
     return _session.import_cad_file(path, name)
 
 
@@ -217,6 +217,29 @@ BUILD123D-MCP WORKFLOW GUIDE
    search_library("keyword") returns full parameter specs.
    Call load_part("name", '{"param": value}') immediately — no second lookup needed.
    Unspecified parameters use the defaults shown in search results.
+
+9. BD_WAREHOUSE FASTENERS
+   Read the build123d://bd_warehouse resource before scripting any fastener geometry.
+   Always probe sizes before writing the script to get the correct string format:
+     execute('from bd_warehouse.fastener import CounterSunkScrew; print(CounterSunkScrew.sizes("iso10642"))')
+   Use CounterSinkHole/TapHole/ClearanceHole/CounterBoreHole with the fastener object —
+   never compute head geometry or tap-drill diameters manually.
+
+10. RECOMMENDED WORKFLOW FOR COMPLEX BUILDS
+   The execute() timeout (default 120s) hard-limits what can be built in a single call.
+   For builds with many booleans (IsoThread, multi-body fillets, high face counts):
+     a) Probe the API here: small execute() calls, dir(), inspect.signature(), size lookups.
+     b) Write the actual build as a Python script; run it with Bash.
+     c) Import the result: import_cad_file("part.step", "part")
+     d) Verify and visualise: measure("part"), render_view(objects="part")
+   The timeout ceiling can be raised with --exec-timeout N or BUILD123D_EXEC_TIMEOUT=N.
+
+11. IMPORTING EXTERNAL FILES
+   After import_cad_file(), the shape is a named object — use render_view(objects="name")
+   to visualise it. If the session also contains the original built shape at the same
+   position, always render by name to avoid Z-fighting (striped colour artifacts).
+   STL imports produce a shell (volume=0); render_view and measure work, but interference()
+   and boolean operations require a solid.
 """
 
 
@@ -268,6 +291,7 @@ Workflow:
 8. When complete: export("part", "step,stl").
 
 Read the build123d://quickref resource before writing execute() code — it has accurate API syntax.
+Read the build123d://bd_warehouse resource for fastener/bearing/thread catalogue and usage patterns.
 Call workflow_hints() if unsure which tool to use next.
 """
     return [PromptMessage(role="user", content=TextContent(type="text", text=text))]
@@ -342,8 +366,8 @@ Part library file format (Python, any .py file under --library path):
     )
     parser.add_argument(
         "--exec-timeout", metavar="SECONDS", type=int,
-        default=int(os.environ.get("BUILD123D_EXEC_TIMEOUT", "60")),
-        help="Execution time limit in seconds for user code (default: 60). "
+        default=int(os.environ.get("BUILD123D_EXEC_TIMEOUT", "120")),
+        help="Execution time limit in seconds for user code (default: 120). "
              "Overrides BUILD123D_EXEC_TIMEOUT env var.",
     )
     args = parser.parse_args()

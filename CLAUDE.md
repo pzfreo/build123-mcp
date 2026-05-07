@@ -58,7 +58,7 @@ Three layers, all must pass before user code runs:
 
 1. **AST check** — blocks imports of anything not in the allowlist (`build123d`, `math`, `numpy`, `typing`, `collections`, `itertools`, `functools`, `copy`) and bare calls to `eval`, `exec`, `open`, etc.
 2. **Restricted builtins** — exec namespace gets a filtered `__builtins__` dict; `open`, `eval`, `exec`, `compile` removed; `__import__` wrapped to enforce the same allowlist at runtime.
-3. **Exec timeout** — default 60 s wall-clock, configurable via `--exec-timeout` CLI flag or `BUILD123D_EXEC_TIMEOUT` env var. After timeout, the thread continues in background and the namespace may be dirty; callers should `reset()` or `restore_snapshot()`.
+3. **Exec timeout** — default 120 s wall-clock, configurable via `--exec-timeout` CLI flag or `BUILD123D_EXEC_TIMEOUT` env var. After timeout, the thread continues in background and the namespace may be dirty; callers should `reset()` or `restore_snapshot()`.
 
 Known limits: memory exhaustion is not bounded; Python introspection chains can escape the sandbox.
 
