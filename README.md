@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/build123d-mcp)](https://pypi.org/project/build123d-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/build123d-mcp)](https://pypi.org/project/build123d-mcp/)
 [![CI](https://github.com/pzfreo/build123d-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pzfreo/build123d-mcp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![build123d-mcp MCP server](https://glama.ai/mcp/servers/pzfreo/build123d-mcp/badges/score.svg)](https://glama.ai/mcp/servers/pzfreo/build123d-mcp)
 
 An MCP (Model Context Protocol) server that exposes build123d CAD operations as tools, enabling AI assistants to build, inspect, and iterate on 3D geometry interactively.
@@ -14,17 +14,52 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 
 ## Tools
 
+**Core**
 - `execute` — run build123d Python code in a persistent session; use `show(shape, name)` to register named parts
+- `reset` — clear session back to empty state (namespace, shapes, snapshots)
+
+**Geometry inspection**
+- `measure` — full geometric summary: volume, area, topology, bounding box, centre of mass, inertia tensor, face-type inventory
+- `clearance` — minimum distance (mm) between two named shapes
+- `cross_sections` — cross-sectional areas at evenly spaced planes along X/Y/Z; useful for detecting voids and wall-thickness variation
+- `session_state` — full JSON snapshot of active shapes, named objects, snapshot names, and Python namespace variables
+- `last_error` — details of the last failed `execute()`: type, message, line number, and code excerpt
+
+**Viewing**
 - `render_view` — render one or more shapes as PNG or SVG; supports assembly compositing, high-quality tessellation, and cross-section clip planes
-- `measure` — query bounding box, volume, surface area, topology, minimum wall thickness, or clearance between two named bodies
-- `export` — export as STEP, STL, or both in one call; targets a named object or the current shape
-- `session_state` — full JSON snapshot of active shapes, named objects, and snapshot names
-- `health_check` — verify VTK/SVG/STEP/STL dependencies work end-to-end before starting work
-- `save_snapshot` / `restore_snapshot` / `diff_snapshot` — checkpoint, recover, and compare geometric state
+
+**Import / export**
+- `export` — export as STEP, STL, or both in one call; targets a named object, the current shape, or `*` for all objects as an assembly
+- `import_cad_file` — load a STEP or STL file as a named object for comparison
+
+**Comparison**
+- `shape_compare` — compare two named shapes by volume, bbox, topology, and centre offset
 - `interference` — check intersection volume between two named shapes
-- `list_objects` — list all named shapes with geometry stats
+
+**Session checkpoints**
+- `save_snapshot` / `restore_snapshot` / `diff_snapshot` — checkpoint, recover, and compare geometric state
+
+**Part library** *(requires `--library` flag)*
+- `search_library` — search the part library by keyword; returns full parameter specs
+- `load_part` — load a named part with optional parameter overrides
+
+**Utility**
 - `version` — return the server version
-- `reset` — clear the session back to empty state
+- `health_check` — verify VTK/SVG/STEP/STL dependencies work end-to-end
+- `repair_hints` — get targeted fix suggestions for a given `execute()` error message
+- `workflow_hints` — guidance on using the tools effectively
+
+## Resources
+
+Read-only MCP resources available to LLM clients:
+
+- `build123d://quickref` — build123d API quick reference (primitives, booleans, positioning, selectors, fillets)
+- `build123d://session` — live session state as JSON (current shape, named objects, snapshots, variables)
+- `build123d://bd_warehouse` — catalogue of pre-built parametric parts from bd_warehouse (bearings, fasteners, gears, pipes, threads, and more)
+
+## Prompts
+
+- `start-cad-session` — primes a new CAD design session with the task description and step-by-step workflow reminders
 
 See [llms.md](llms.md) for full tool reference and usage patterns.
 
@@ -142,6 +177,6 @@ For best results, paste the contents of [default_prompt.md](default_prompt.md) a
 
 ## Status
 
-Active development (v0.1.0).
+Active development (v0.3.13).
 
 <!-- mcp-name: io.github.pzfreo/build123d-mcp -->

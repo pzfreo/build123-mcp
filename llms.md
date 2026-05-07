@@ -62,20 +62,9 @@ Return a structured JSON snapshot of the full session.
 - `current_shape` — geometry metrics (volume, faces, edges, vertices, bbox) or `null`
 - `objects` — dict of name → metrics for all shapes registered via `show()`
 - `snapshots` — list of saved snapshot names
+- `variables` — summary of non-shape Python namespace variables (type + value/length for scalars and collections)
 
-Use this to orient at the start of a session, after a restore, or after a multi-step build to confirm what geometry is active.
-
-```json
-{
-  "current_shape": {"volume": 1000.0, "faces": 6, "edges": 12, "vertices": 8,
-                    "bbox": [10.0, 10.0, 10.0]},
-  "objects": {
-    "frame": {"volume": 1920.0, "faces": 6, "edges": 12, "vertices": 8,
-              "bbox": [60.0, 40.0, 8.0]}
-  },
-  "snapshots": ["before_fillet", "v2"]
-}
-```
+Use this to orient at the start of a session, after a restore, or after a multi-step build to confirm what geometry and variables are active. Replaces the removed `list_objects` tool.
 
 ---
 
@@ -115,37 +104,44 @@ Each named object is rendered in a distinct colour. Call this after each signifi
 ---
 
 ### `measure`
-Query geometry of a shape.
+Return a complete geometric summary of a shape in a single call.
+
+**Input:** `object_name` (string, default `""`) — named object from `show()`; empty = `current_shape`
+
+**Returns:** JSON with:
+- `volume` (mm³), `area` (mm²)
+- `topology` — `faces`, `edges`, `vertices`; fastest way to confirm a boolean succeeded (a failed cut leaves counts unchanged)
+- `bounding_box` — per-axis min/max, size, and `center`
+- `center_of_mass` — volumetric centroid
+- `inertia` — 6-component tensor: `Ixx/Iyy/Izz/Ixy/Ixz/Iyz`
+- `face_inventory` — every face classified as `Plane/Cylinder/Cone/Sphere/Torus/BSpline` with area and type-specific params (e.g. cylinder diameter and axis)
+
+Prefer `measure()` over `render_view()` for verifying geometry — numbers are unambiguous.
+
+---
+
+### `clearance`
+Return the minimum distance (mm) between two named shapes.
+
+**Inputs:** `object_a`, `object_b` (string) — names from `show()`
+
+**Returns:** JSON, e.g. `{"clearance": 1.5}`
+
+A result of `0` means the shapes are touching or overlapping — use `interference()` to check for actual overlap volume.
+
+---
+
+### `cross_sections`
+Compute cross-sectional areas at evenly spaced planes along an axis.
 
 **Inputs:**
-- `query` (string, default `"bounding_box"`) — one of:
-  - `bounding_box` — extents, sizes, and centre
-  - `volume` — shape volume
-  - `area` — total surface area
-  - `topology` — face, edge, and vertex counts; fastest way to confirm a boolean succeeded
-  - `min_wall_thickness` — shortest wall crossing via ray cast (accurate for prismatic parts)
-  - `clearance` — minimum distance between two named bodies (requires `object_name` and `object_name2`)
 - `object_name` (string, default `""`) — named object from `show()`; empty = `current_shape`
-- `object_name2` (string, default `""`) — second named object; required for `clearance`
+- `axis` (string, default `"Z"`) — `X`, `Y`, or `Z`
+- `num_slices` (int, default `10`) — number of planes (minimum 2)
 
-**Returns:** JSON
+**Returns:** JSON array of `{position, area}` pairs.
 
-`bounding_box` example:
-```json
-{
-  "xmin": -5.0, "xmax": 5.0,
-  "ymin": -10.0, "ymax": 10.0,
-  "zmin": -15.0, "zmax": 15.0,
-  "xsize": 10.0, "ysize": 20.0, "zsize": 30.0,
-  "center": {"x": 0.0, "y": 0.0, "z": 0.0}
-}
-```
-
-`volume` example: `{"volume": 1000.0}`
-
-`topology` example: `{"faces": 6, "edges": 12, "vertices": 8}`
-
-`clearance` example: `{"clearance": 1.0}`
+Useful for detecting internal voids, wall-thickness variation, or verifying a shape's cross-section profile against a reference.
 
 ---
 
@@ -155,7 +151,7 @@ Export a shape to a file.
 **Inputs:**
 - `filename` (string) — target path; extension auto-appended if missing
 - `format` (string, default `"step"`) — `"step"`, `"stl"`, or comma-separated `"step,stl"` to write both in one call
-- `object_name` (string, default `""`) — named object from `show()`; empty = `current_shape`
+- `object_name` (string, default `""`) — named object from `show()`; `"*"` to export all named objects as a combined assembly; empty = `current_shape`
 
 **Returns:** path(s) of exported file(s)
 
@@ -166,19 +162,90 @@ STEP preserves exact geometry for downstream CAD tools. STL is for mesh-based wo
 ### `interference`
 Check whether two named shapes intersect.
 
-**Inputs:**
-- `object_a`, `object_b` (string) — names from `show()`
+**Inputs:** `object_a`, `object_b` (string) — names from `show()`
 
 **Returns:** JSON with `interferes` (bool), `volume` (mm³ of overlap), and `bounds` of the interference region.
 
 ---
 
-### `list_objects`
-List all named shapes registered via `show()`.
+### `shape_compare`
+Compare two named shapes by geometry metrics.
+
+**Inputs:** `object_a`, `object_b` (string) — names from `show()`
+
+**Returns:** JSON with volume delta, bbox delta, topology delta (faces/edges/vertices), and centre offset.
+
+Useful for verifying a procedural build matches a reference, or quantifying how a modification changed the geometry.
+
+---
+
+### `import_cad_file`
+Import a STEP or STL file as a named object in the session.
+
+**Inputs:**
+- `path` (string) — absolute or relative path to the file (`.step`, `.stp`, or `.stl`)
+- `name` (string, default `""`) — name to register under; defaults to the filename stem
+
+**Returns:** volume, topology, and bounding box of the imported shape. The shape becomes both the named object and `current_shape`.
+
+Use with `shape_compare()` to verify a procedural build against a reference.
+
+---
+
+### `search_library`
+Search the part library by keyword.
+
+**Input:** `query` (string, default `""`) — keywords matched against name, description, tags, category; empty returns all parts
+
+**Returns:** name, category, description, tags, and full parameter specs (types, defaults, descriptions)
+
+*Requires server started with `--library PATH` or `BUILD123D_PART_LIBRARY` env var.*
+
+---
+
+### `load_part`
+Load a named part from the library into the session.
+
+**Inputs:**
+- `name` (string) — part name from `search_library()`
+- `params` (string, default `""`) — optional JSON object of parameter overrides, e.g. `'{"od": 8.0, "length": 20.0}'`; unspecified params use their defaults
+
+**Returns:** confirmation; the part is registered as a named object and becomes `current_shape`.
+
+*Requires server started with `--library PATH` or `BUILD123D_PART_LIBRARY` env var.*
+
+---
+
+### `last_error`
+Return details of the last failed `execute()` call.
 
 **No inputs.**
 
-**Returns:** JSON array of objects with name, volume, faces, edges, vertices.
+**Returns:** JSON with exception type, message, and (for runtime/syntax errors) line number and a 5-line excerpt around the failing line. Returns `{"error": null}` if the last `execute()` succeeded or none has failed yet.
+
+Call immediately after an `execute()` error to get the exact failing line without re-reading the submitted code.
+
+---
+
+### `repair_hints`
+Get targeted fix suggestions for an `execute()` error message.
+
+**Input:** `error_text` (string) — the full error string from `execute()` or `last_error()`
+
+**Returns:** matched hints from the repair library covering common build123d mistakes (wrong Location syntax, missing `.part`, CadQuery idioms, blocked imports, degenerate booleans, fillet edge selection, etc.).
+
+Note: `execute()` already appends relevant hints inline on error — use `repair_hints()` for additional suggestions or when working with a stored error string.
+
+---
+
+### `workflow_hints`
+Return guidance on using these tools effectively.
+
+**No inputs.**
+
+**Returns:** plain text guide covering orient-first, measure-before-render, boolean verification, shape naming, checkpointing, cross-sections, and part library usage.
+
+Call at the start of a session or whenever unsure which tool to reach for next.
 
 ---
 
@@ -230,16 +297,44 @@ Clear the session back to empty state, including all snapshots.
 
 1. `version` — confirm server version
 2. `health_check` — verify dependencies (optional; run if first session or suspect issues)
-3. `reset` — start clean
-4. `execute` — imports and initial geometry; use `show()` for named parts
-5. `session_state` — confirm active shapes after any complex step
-6. `render_view` — visually verify (try `iso` first; use `quality="high"` for curved surfaces)
-7. `measure` — confirm dimensions (`bounding_box`, `volume`, `topology`, `clearance`, etc.)
-8. `save_snapshot` — checkpoint before complex or risky operations
-9. `execute` — add features; if something breaks, `restore_snapshot`
-10. `diff_snapshot` — confirm what changed (use `format="json"` for programmatic checks)
-11. Repeat 5–10 until satisfied
-12. `export` — write STEP + STL in one call with `format="step,stl"`
+3. Read `build123d://quickref` — get accurate API syntax before writing any `execute()` code
+4. `reset` — start clean
+5. `execute` — imports and initial geometry; use `show()` for named parts
+6. `measure` — verify geometry numerically (check `volume` and `topology.faces` after every boolean)
+7. `session_state` — confirm active shapes after any complex step
+8. `render_view` — visually verify (try `iso` first; use `quality="high"` for curved surfaces)
+9. `save_snapshot` — checkpoint before complex or risky operations
+10. `execute` — add features; if something breaks, `restore_snapshot`
+11. `diff_snapshot` — confirm what changed (use `format="json"` for programmatic checks)
+12. Repeat 6–11 until satisfied
+13. `export` — write STEP + STL in one call with `format="step,stl"`
+
+---
+
+---
+
+## MCP Resources
+
+Read-only resources that LLM clients can fetch without spending a tool-call round-trip:
+
+| URI | MIME type | Contents |
+|-----|-----------|----------|
+| `build123d://quickref` | `text/plain` | build123d API quick reference: primitives, booleans, positioning, sketch-to-3D, selectors, fillets. Every example is tested on each release. |
+| `build123d://session` | `application/json` | Live session state: current shape diagnostics, named objects, snapshots, and Python namespace variables. Equivalent to calling `session_state()`. |
+| `build123d://bd_warehouse` | `text/plain` | Catalogue of pre-built parametric parts from bd_warehouse: bearings, fasteners, gears, pipes, sprockets, threads. Includes class names, descriptions, constructor signatures, and available sizes. |
+
+Read these resources at session start to avoid tool round-trips for orientation data.
+
+---
+
+## Prompt
+
+### `start-cad-session`
+Prime a new CAD design session with the task description and workflow reminders.
+
+**Input:** `description` (string) — what you want to build
+
+**Returns:** a user message containing the task description plus an 8-step workflow reminder (reset → execute → measure → render → snapshot → export).
 
 ---
 
@@ -285,5 +380,7 @@ All units are millimetres by default.
 - **Forgetting imports:** the namespace starts empty. Include `from build123d import *` in your first `execute` call.
 - **Shape not detected:** if the server doesn't pick up your shape, assign it explicitly to `result` or use `show()`.
 - **Dirty session:** unexpected results often mean leftover state. Call `reset` first, or `session_state` to inspect what's active.
-- **`clearance` missing second object:** `clearance` requires both `object_name` and `object_name2`.
+- **Boolean succeeded but geometry is wrong:** always call `measure()` after a boolean and check `topology.faces` — a failed cut leaves counts unchanged.
+- **Using render_view as geometric proof:** renders can look correct even when geometry is wrong. Use `measure()` to verify numerically first.
 - **Failed execute advancing state:** it doesn't — failed code preserves the previous `current_shape`.
+- **Library tools without --library:** `search_library` and `load_part` return an error if the server wasn't started with `--library PATH`.
