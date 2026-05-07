@@ -1232,8 +1232,10 @@ def test_render_view_stl_import_non_trivial(session, tmp_path, monkeypatch):
     import_cad_file(session, str(tmp_path / "box.stl"), "mesh")
     out = render_view(session, "iso")
     assert out["png"][:8] == PNG_MAGIC
-    # A properly shaded render is non-trivial; an all-black or empty render would be tiny
-    assert len(out["png"]) > 5000, "PNG suspiciously small — likely an all-black or empty render"
+    # A properly shaded render is non-trivial. An all-black 800×600 PNG compresses to
+    # well under 1 KB; 2000 bytes is a safe floor that catches empty/uniform renders
+    # while tolerating platform differences in VTK tessellation complexity.
+    assert len(out["png"]) > 2000, "PNG suspiciously small — likely an all-black or empty render"
 
 
 # --- health_check ---
