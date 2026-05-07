@@ -114,13 +114,45 @@ def build_bd_warehouse_text() -> str:
         "bd_warehouse.thread": "Threads",
     }
 
-    sections: list[str] = [
-        "BD_WAREHOUSE COMPONENTS\n"
-        "=======================\n"
-        "Pre-built parametric parts for build123d. "
-        "Import each class from the module shown.\n"
-        "All dimensions in mm unless noted.",
-    ]
+    _USAGE_PREAMBLE = """\
+BD_WAREHOUSE COMPONENTS
+=======================
+Pre-built parametric parts for build123d.
+Import each class from the module shown. All dimensions in mm unless noted.
+
+SIZE STRING FORMAT
+  Use 'M6-1' not 'M6-1.0'. Always probe before scripting:
+    from bd_warehouse.fastener import CounterSunkScrew
+    print(CounterSunkScrew.sizes("iso10642"))
+  This shows all valid strings and avoids format errors at build time.
+
+HOLE OPERATIONS  (from bd_warehouse.fastener import ...)
+  These accept a fastener object and derive all geometry from its ISO data.
+  Never compute countersink or tap-drill dimensions manually — use these instead.
+
+  CounterSinkHole(fastener, depth, fit='Normal', counter_sink_angle=82)
+    Correctly-sized countersunk hole for flat/CSK screws. Example:
+      screw = CounterSunkScrew(size='M6-1', fastener_type='iso10642', length=10)
+      with BuildPart() as p:
+          Cylinder(radius=20, height=10)
+          CounterSinkHole(fastener=screw, depth=10)
+
+  TapHole(fastener, depth, fit='Normal', include_threads=False)
+    Tapped bore at the correct ISO tap-drill diameter.
+    Set include_threads=True to add modelled helical thread geometry.
+      TapHole(fastener=screw, depth=10, include_threads=True)
+
+  ClearanceHole(fastener, depth, fit='Normal', counter_sunk=False)
+    Through-hole on a mating part; fit controls close/normal/loose clearance.
+      ClearanceHole(fastener=screw, depth=10)
+
+  CounterBoreHole(fastener, depth, fit='Normal')
+    Counterbored hole for socket-head cap screws.
+      bolt = SocketHeadCapScrew(size='M6-1', fastener_type='iso4762', length=20)
+      CounterBoreHole(fastener=bolt, depth=20)\
+"""
+
+    sections: list[str] = [_USAGE_PREAMBLE]
 
     for mod_name, label in module_labels.items():
         try:

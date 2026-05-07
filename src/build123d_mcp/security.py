@@ -22,7 +22,7 @@ from typing import Any
 # Configuration
 # ---------------------------------------------------------------------------
 
-EXEC_TIMEOUT_SECONDS = 60
+EXEC_TIMEOUT_SECONDS = 120
 
 # Modules user code may import. build123d's own internal imports are
 # unaffected — they run through the real import system, not this namespace.
@@ -63,6 +63,9 @@ IMPORT_ALLOWLIST = frozenset({
     "io",
     "warnings",
     "contextlib",
+    # Introspection — signature(), getdoc(), getmembers() are read-only and help with
+    # API discovery without requiring docs. Cannot execute code.
+    "inspect",
 })
 
 # OCP (OpenCASCADE Python bindings) sub-modules that are safe to import.
@@ -150,15 +153,18 @@ ALLOW_ALL_IMPORTS: bool = False
 # Builtins that are dangerous even without an import.
 _BLOCKED_BUILTINS = frozenset({
     "eval", "exec", "compile", "open", "breakpoint", "input",
-    # Introspection builtins that enable subclass-traversal sandbox escapes.
-    "getattr", "vars", "dir", "hasattr",
+    # getattr/vars/hasattr can bypass the dunder-attribute AST block via string arguments
+    # (e.g. getattr(obj, '__class__')). dir() is safe: it only enumerates names already
+    # in scope; dunder attribute *access* is still blocked at the AST level.
+    "getattr", "vars", "hasattr",
 })
 
 # Bare-name calls that are caught at the AST level (before exec runs).
 _BLOCKED_CALL_NAMES = frozenset({
     "__import__", "eval", "exec", "compile", "open", "breakpoint", "input",
-    # Introspection calls that can bypass dunder-attribute blocking via strings.
-    "getattr", "vars", "dir", "hasattr",
+    # Same rationale as _BLOCKED_BUILTINS: getattr/vars/hasattr bypass the dunder check
+    # via string arguments. dir() allowed.
+    "getattr", "vars", "hasattr",
 })
 
 

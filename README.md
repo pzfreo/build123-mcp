@@ -63,6 +63,49 @@ Read-only MCP resources available to LLM clients:
 
 See [llms.md](llms.md) for full tool reference and usage patterns.
 
+## Recommended workflow
+
+Build complexity falls into two tiers and the right approach differs between them.
+
+**Simple shapes** (a few primitives, up to ~5 booleans): build entirely in `execute()`.
+
+**Complex shapes** (IsoThread, multi-body fillets, high face counts): the `execute()` timeout (default 120 s) is a hard ceiling. The efficient pattern is:
+
+1. **Probe** in the MCP — small `execute()` calls to discover API signatures, size strings, and face counts. Use `dir()` and `import inspect; inspect.signature(ClassName)` freely.
+2. **Build** in a Python script — run it with Bash (or your shell). No timeout, full Python.
+3. **Import and verify** in the MCP:
+   ```
+   import_cad_file("/path/to/part.step", "part")
+   measure("part")          # verify volume, topology, bounding box
+   render_view(objects="part")  # visualise
+   ```
+
+> **Timeout note:** the default is 120 s. Raise it with `--exec-timeout N` or `BUILD123D_EXEC_TIMEOUT=N`. When a timeout fires, all session state is lost (worker is restarted) — you must re-run any setup code.
+
+> **Import note:** after `import_cad_file()` the shape is a named session object. Always render it by name (`objects="part"`) when other shapes from the same build are also in session — two co-located shapes cause Z-fighting (striped colour artifacts). STL imports produce a shell (volume = 0); `render_view` and `measure` work, but `interference()` and boolean operations require a solid.
+
+## bd_warehouse fasteners
+
+bd_warehouse is a full fastener system, not just a thread library. Always:
+
+1. **Probe sizes first** (correct string format is `"M6-1"` not `"M6-1.0"`):
+   ```python
+   from bd_warehouse.fastener import CounterSunkScrew
+   print(CounterSunkScrew.sizes("iso10642"))
+   ```
+2. **Instantiate the fastener object**, then pass it to the hole operation — never compute head geometry or tap-drill diameters manually:
+   ```python
+   from bd_warehouse.fastener import CounterSunkScrew, CounterSinkHole, TapHole
+   screw = CounterSunkScrew(size="M6-1", fastener_type="iso10642", length=10)
+
+   with BuildPart() as wheel:
+       Cylinder(radius=20, height=10)
+       CounterSinkHole(fastener=screw, depth=10)   # countersunk through-hole
+       TapHole(fastener=screw, depth=8)             # tapped bore
+   ```
+
+See `build123d://bd_warehouse` (MCP resource) for the full catalogue and usage patterns.
+
 ## Requirements
 
 - [uv](https://github.com/astral-sh/uv)

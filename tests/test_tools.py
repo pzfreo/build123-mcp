@@ -82,6 +82,16 @@ def test_execute_detects_buildpart(session):
 
 # --- security ---
 
+def test_show_objects_persist_across_execute_calls(session):
+    """Objects registered with show() in one execute call are accessible in later calls."""
+    execute_code(session, "show(Box(10, 10, 10), 'box1')")
+    execute_code(session, "show(Cylinder(5, 10), 'cyl1')")
+    assert "box1" in session.objects
+    assert "cyl1" in session.objects
+    out = render_view(session, "iso", "box1")
+    assert out["png"][:8] == PNG_MAGIC
+
+
 def test_import_os_blocked(session):
     result = execute_code(session, "import os")
     assert "SecurityError" in result or "not allowed" in result.lower()
@@ -125,6 +135,27 @@ def test_open_call_blocked(session):
 def test_open_removed_from_builtins(session):
     # open is blocked by builtins restriction even if AST check were bypassed
     assert "open" not in session.namespace.get("__builtins__", {})
+
+
+def test_dir_allowed(session):
+    result = execute_code(session, "attrs = dir([])")
+    assert "Error" not in result
+
+
+def test_dir_shows_methods(session):
+    result = execute_code(session, "names = dir([])\nassert 'append' in names")
+    assert "Error" not in result
+
+
+def test_inspect_import_allowed(session):
+    result = execute_code(session, "import inspect")
+    assert "not allowed" not in result.lower()
+    assert "Error" not in result
+
+
+def test_inspect_signature_works(session):
+    result = execute_code(session, "import inspect\nfrom build123d import Box\nsig = str(inspect.signature(Box))")
+    assert "Error" not in result
 
 
 def test_import_math_allowed(session):
@@ -1150,6 +1181,59 @@ def test_import_step_becomes_current_shape(session, tmp_path, monkeypatch):
     import_cad_file(session, str(tmp_path / "shape.step"), "imported")
     assert session.current_shape is not None
     assert "imported" in session.objects
+
+
+# --- render_view after import ---
+
+def test_render_view_after_step_import(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(10, 10, 10)")
+    export_file(session, str(tmp_path / "ref"), "step")
+    session.reset()
+    execute_code(session, "from build123d import *")
+    import_cad_file(session, str(tmp_path / "ref.step"), "imported")
+    out = render_view(session, "iso")
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_after_stl_import(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(10, 10, 10)")
+    export_file(session, str(tmp_path / "ref"), "stl")
+    session.reset()
+    execute_code(session, "from build123d import *")
+    import_cad_file(session, str(tmp_path / "ref.stl"), "imported")
+    out = render_view(session, "iso")
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_imported_by_name(session, tmp_path, monkeypatch):
+    """Rendering a specific imported object by name avoids Z-fighting with other shapes."""
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "show(Box(10, 10, 10), 'original')")
+    export_file(session, str(tmp_path / "ref"), "step")
+    import_cad_file(session, str(tmp_path / "ref.step"), "imported")
+    out = render_view(session, "iso", objects="imported")
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_stl_import_non_trivial(session, tmp_path, monkeypatch):
+    """Regression: STL-imported shells must produce a shaded render, not an all-black image.
+    The vtkPolyDataNormals fix ensures consistent face orientation on mesh shells."""
+    monkeypatch.chdir(tmp_path)
+    from build123d_mcp.tools.import_step import import_cad_file
+    execute_code(session, "result = Box(20, 20, 20)")
+    export_file(session, str(tmp_path / "box"), "stl")
+    session.reset()
+    execute_code(session, "from build123d import *")
+    import_cad_file(session, str(tmp_path / "box.stl"), "mesh")
+    out = render_view(session, "iso")
+    assert out["png"][:8] == PNG_MAGIC
+    # A properly shaded render is non-trivial; an all-black or empty render would be tiny
+    assert len(out["png"]) > 5000, "PNG suspiciously small — likely an all-black or empty render"
 
 
 # --- health_check ---
