@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.14
+
+### Improvements
+
+- **Default exec timeout raised to 120 s** (was 60 s) — allows more complex boolean operations to complete inside the MCP without needing to fall back to a plain Python script.
+- **`dir()` restored** — available again as a builtin inside `execute()`. Dunder attribute access remains blocked at the AST level, so the sandbox is unaffected.
+- **`inspect` allowlisted** — `import inspect` now works inside `execute()`. `inspect.signature()`, `inspect.getdoc()`, and `inspect.getmembers()` enable API discovery without trial-and-error round trips.
+- **STL render quality improved** — `vtkPolyDataNormals` (with `ConsistencyOn` and `AutoOrientNormalsOn`) is now applied before the VTK mapper. Imported STL shells shade correctly instead of rendering with incorrect face orientation.
+- **`import_cad_file` docstring clarified** — documents that `render_view` works after import, that STL imports produce a shell (volume = 0), and that rendering by object name avoids Z-fighting when the original built shape is also in session.
+- **Timeout error improved** — when `execute()` times out the error message now explains that all session state has been lost (worker restarted) and recommends the probe-in-MCP / build-in-script / import-and-verify workflow.
+- **`bd_warehouse` resource expanded** — new preamble documents the correct size string format (`"M6-1"` not `"M6-1.0"`), a probe pattern (`ClassName.sizes("type")`), and working code examples for `CounterSinkHole`, `TapHole`, `ClearanceHole`, and `CounterBoreHole`.
+- **`workflow_hints()` expanded** — new items cover bd_warehouse fastener probing, the complex-build workflow (probe → script → import → verify), import→render pattern, and Z-fighting guidance.
+- **README expanded** — "Recommended workflow" and "bd_warehouse fasteners" sections added.
+
+---
+
 ## v0.3.13
 
 ### Features
