@@ -269,6 +269,14 @@ def build123d_quickref() -> str:
     return build_quickref_text()
 
 
+@mcp.resource("build123d://selectors", mime_type="text/plain",
+              description="Task-indexed cookbook of selector patterns: get the top face, find circular edges, filter by area/length/radius, Select.LAST in builder context, fillet detection, and the operator shortcuts.")
+def build123d_selectors_cookbook() -> str:
+    """build123d selectors cookbook — task-indexed patterns."""
+    from build123d_mcp.selectors_cookbook import build_selectors_cookbook_text
+    return build_selectors_cookbook_text()
+
+
 @mcp.resource("build123d://session", mime_type="application/json",
               description="Live session state: current shape diagnostics, named objects, snapshots, and user-defined variables.")
 def build123d_session_state() -> str:
