@@ -76,7 +76,7 @@ def cross_sections(object_name: str = "", axis: str = "Z", num_slices: int = 10)
 
 @mcp.tool()
 def export(filename: str, format: str = "step", object_name: str = "") -> str:
-    """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show(), '*' to export all named shapes as a combined assembly (default: current shape)."""
+    """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show(), '*' to export all named shapes as a combined assembly (default: current shape). STEP exports carry the session names as labels — single-object exports use the object_name, '*' exports produce a Compound labelled 'assembly' with each child labelled by its show() name. Downstream CAD tools (FreeCAD, Fusion) will see the structured assembly with named bodies."""
     return _session.export_file(filename, format, object_name)
 
 

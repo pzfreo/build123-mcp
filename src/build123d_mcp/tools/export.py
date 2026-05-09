@@ -1,3 +1,4 @@
+import copy
 import struct
 
 from build123d_mcp.tools._paths import safe_output_path
@@ -5,16 +6,26 @@ from build123d_mcp.tools._paths import safe_output_path
 _VALID_FORMATS = ("step", "stl")
 
 
+def _labelled_copy(shape, label: str):
+    """Return a shallow copy of `shape` with `.label` set, preserving any
+    existing color. Used to carry session names through to the exported
+    file without mutating the original shape in session.objects."""
+    c = copy.copy(shape)
+    c.label = label
+    return c
+
+
 def _resolve_shape(session, object_name: str):
     if object_name == "*":
         if not session.objects:
             raise ValueError("No named objects in session. Use show() to register shapes first.")
         from build123d import Compound
-        return Compound(children=list(session.objects.values()))
+        children = [_labelled_copy(s, name) for name, s in session.objects.items()]
+        return Compound(label="assembly", children=children)
     if object_name:
         if object_name not in session.objects:
             raise ValueError(f"Unknown object '{object_name}'. Registered: {list(session.objects.keys())}")
-        return session.objects[object_name]
+        return _labelled_copy(session.objects[object_name], object_name)
     if session.current_shape is None:
         raise ValueError("No shape in session. Execute code to create geometry first.")
     return session.current_shape

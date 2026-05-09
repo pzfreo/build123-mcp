@@ -570,6 +570,36 @@ def test_export_to_slash_tmp_allowed(session):
             os.unlink(target)
 
 
+def test_export_step_named_object_carries_label(session, tmp_path, monkeypatch):
+    """A single named object exported to STEP should carry its session name as the label."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(10, 10, 10), 'bracket')")
+    export_file(session, "out", "step", object_name="bracket")
+    content = (tmp_path / "out.step").read_text()
+    assert "bracket" in content
+
+
+def test_export_step_star_carries_assembly_and_child_labels(session, tmp_path, monkeypatch):
+    """Exporting * should produce a STEP file with the assembly label and each child name."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(10, 10, 10), 'bracket')")
+    execute_code(session, "show(Cylinder(2, 8).move(Location((20, 0, 0))), 'pin')")
+    export_file(session, "out", "step", object_name="*")
+    content = (tmp_path / "out.step").read_text()
+    assert "bracket" in content
+    assert "pin" in content
+    assert "assembly" in content
+
+
+def test_export_step_does_not_mutate_session_shapes(session, tmp_path, monkeypatch):
+    """Setting labels for export must not leak back into session.objects."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(10, 10, 10), 'bracket')")
+    original_label = getattr(session.objects["bracket"], "label", None)
+    export_file(session, "out", "step", object_name="bracket")
+    assert getattr(session.objects["bracket"], "label", None) == original_label
+
+
 def test_export_symlink_escape_rejected(session, tmp_path):
     execute_code(session, "result = Box(10, 10, 10)")
     link = tmp_path / "escape.step"
