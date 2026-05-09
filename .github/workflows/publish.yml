@@ -14,11 +14,18 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Set dev version for TestPyPI
+      - name: Set TestPyPI dev version
         if: github.event_name == 'push'
         run: |
           current=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          uv version "${current}.dev${{ github.run_number }}"
+          base="${current%.dev*}"
+          uv version "${base}.dev${{ github.run_number }}"
+      - name: Strip dev suffix for real release
+        if: github.event_name == 'release'
+        run: |
+          current=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          base="${current%.dev*}"
+          uv version "$base"
       - run: uv build
       - uses: actions/upload-artifact@v4
         with:
@@ -68,11 +75,12 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Bump patch version
+      - name: Bump patch version with .dev0 suffix
         run: |
           current=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          IFS='.' read -r major minor patch <<< "$current"
-          uv version "${major}.${minor}.$((patch + 1))"
+          base="${current%.dev*}"
+          IFS='.' read -r major minor patch <<< "$base"
+          uv version "${major}.${minor}.$((patch + 1)).dev0"
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"

@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.3.14
+## v0.3.13
+
+### Features
+
+- **`build123d://quickref` MCP resource**: exposes a plain-text quick reference for the build123d API so LLM clients can read accurate syntax before calling `execute()`. Every runnable example is tested automatically to ensure the quickref stays accurate as the codebase evolves.
+- **`start-cad-session` prompt**: primes a design session with the task description plus step-by-step workflow reminders.
+- **`build123d://session` MCP resource**: read-only JSON resource exposing live session state — `current_shape` diagnostics, named objects, snapshots, and user-defined variables. Clients can read session state without spending a tool-call round-trip on `session_state()`.
+- **`build123d://bd_warehouse` MCP resource**: introspects the installed `bd_warehouse` package and returns a plain-text catalogue of all available parametric components (bearings, fasteners, flanges, gears, OpenBuilds parts, pipes, sprockets, threads). Each entry shows the class name, description, constructor signature, and for size-standardised classes the available types and sizes.
+- **`render_view` labels**: two new optional parameters. `label_objects=True` labels each named object from `show()` at its centroid in the PNG. `highlights=[{"object", "type", "index", "label"}, ...]` labels specific faces, edges, or vertices by index — useful for confirming "edge 5 is the one I want to fillet" before committing to an operation. Labels render on a depth-cleared overlay layer so they stay legible even when sitting at a solid's interior centroid. SVG output is unlabelled (a `label_warnings` entry surfaces this).
 
 ### Improvements
 
@@ -14,16 +22,10 @@
 - **`workflow_hints()` expanded** — new items cover bd_warehouse fastener probing, the complex-build workflow (probe → script → import → verify), import→render pattern, and Z-fighting guidance.
 - **README expanded** — "Recommended workflow" and "bd_warehouse fasteners" sections added.
 
----
+### Release process
 
-## v0.3.13
-
-### Features
-
-- **`build123d://quickref` MCP resource**: exposes a plain-text quick reference for the build123d API so LLM clients can read accurate syntax before calling `execute()`. Every runnable example is tested automatically to ensure the quickref stays accurate as the codebase evolves.
-- **`start-cad-session` prompt**: primes a design session with the task description plus step-by-step workflow reminders.
-- **`build123d://session` MCP resource**: read-only JSON resource exposing live session state — `current_shape` diagnostics, named objects, snapshots, and user-defined variables. Clients can read session state without spending a tool-call round-trip on `session_state()`.
-- **`build123d://bd_warehouse` MCP resource**: introspects the installed `bd_warehouse` package and returns a plain-text catalogue of all available parametric components (bearings, fasteners, flanges, gears, OpenBuilds parts, pipes, sprockets, threads). Each entry shows the class name, description, constructor signature, and for size-standardised classes the available types and sizes.
+- **`.dev0` version convention**: between releases, `pyproject.toml` carries a `.dev0` suffix (e.g. `0.3.14.dev0`) so it self-documents that the working version has not yet been published. The publish workflow strips the suffix on real release and TestPyPI builds replace `.dev0` with `.dev<run_number>`. Anyone — human or AI — reading `pyproject.toml` can immediately tell which version is published vs in development.
+- **`CLAUDE.md` documents release process**: only `gh release create vX.Y.Z` cuts a release; never edit `pyproject.toml` or push tags manually.
 
 ---
 
