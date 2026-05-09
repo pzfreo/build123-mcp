@@ -25,7 +25,9 @@ SECTIONS: list[Section] = [
     Section(
         label="pattern1",
         text="""\
-## Pattern 1: direct shape algebra (simplest)
+## Pattern 1: algebra mode (functional composition with operators)
+# Use for: one-off shapes, quick composition, when you don't need selectors
+# during construction. Each statement returns a new shape.
 from build123d import *
 result = Box(20, 10, 5)
 result = result - Cylinder(3, 6).move(Location((0, 0, 0)))
@@ -35,7 +37,9 @@ show(result, "part")""",
     Section(
         label="pattern2",
         text="""\
-## Pattern 2: BuildPart context manager (required for extrude/revolve/loft/fillet)
+## Pattern 2: builder mode (BuildPart context manager)
+# Use for: multi-step parts, anywhere you need extrude/revolve/loft/fillet,
+# or when you want Select.LAST to grab just-added geometry.
 from build123d import *
 with BuildPart() as p:
     Box(20, 10, 5)
@@ -221,6 +225,152 @@ BallJoint(label, to_part, joint_location, angular_range) # 3 rotations, 0 transl
 # For movable joints, pass position/angle to connect_to() to set the configuration:
 #   plate.joints["hinge"].connect_to(arm.joints["pivot"], angle=45)
 #   rail.joints["slot"].connect_to(carriage.joints["slide"], position=10)""",
+    ),
+
+    Section(
+        label="grid_locations",
+        text="""\
+## Pattern placement: GridLocations — N×M array of features
+# Inside a BuildPart, GridLocations(x_spacing, y_spacing, x_count, y_count)
+# acts as a context that places every operation inside it at every grid point.
+# This is the idiomatic "4 holes in a 2x2 grid" — never write a manual for loop.
+from build123d import *
+with BuildPart() as p:
+    Box(40, 40, 5)
+    with GridLocations(20, 20, 2, 2):
+        Hole(radius=2, depth=5)
+result = p.part
+show(result, "plate_with_grid_holes")""",
+    ),
+
+    Section(
+        label="polar_locations",
+        text="""\
+## Pattern placement: PolarLocations — radial arrays (bolt circles)
+# PolarLocations(radius, count, start_angle=0, angular_range=360) places features
+# evenly around a circle. Each item is also rotated to match its angular position.
+from build123d import *
+with BuildPart() as p:
+    Cylinder(20, 5)
+    with PolarLocations(15, 6):  # 6 holes evenly around radius 15
+        Hole(radius=1.5, depth=5)
+result = p.part
+show(result, "flange")""",
+    ),
+
+    Section(
+        label="manual_locations",
+        text="""\
+## Pattern placement: Locations — explicit coordinate list
+# When the placements aren't a regular array, list them. Each tuple is (x, y, z).
+# Locations also accepts Location objects for full position+rotation control.
+from build123d import *
+with BuildPart() as p:
+    Box(40, 20, 5)
+    with Locations((10, 5, 0), (-10, -5, 0), (0, 0, 0)):
+        Hole(radius=1, depth=5)
+result = p.part
+show(result, "plate_with_3_holes")""",
+    ),
+
+    Section(
+        label="position_tangent_at",
+        text="""\
+## Chaining curves with @ (position) and % (tangent)
+# `edge @ t` returns the position at parameter t (0..1 along the edge).
+# `edge % t` returns the tangent direction at t. Use these to build the next
+# curve from the previous one's endpoint+direction without repeating coordinates.
+from build123d import *
+with BuildLine() as l:
+    l1 = Line((0, 0), (10, 0))
+    l2 = JernArc(start=l1 @ 1, tangent=l1 % 1, radius=5, arc_size=90)
+    l3 = Line(l2 @ 1, (l2 @ 1) + (10, 0))
+result = l.line
+show(result, "chained_path")""",
+    ),
+
+    Section(
+        label="op_sweep",
+        text="""\
+## sweep — drag a profile along a path
+# Use for tubing, mouldings, anything with constant cross-section along a curve.
+from build123d import *
+with BuildLine() as path:
+    Line((0, 0, 0), (0, 0, 20))
+with BuildSketch() as profile:
+    Circle(2)
+result = sweep(profile.sketch, path=path.line)
+show(result, "tube")""",
+    ),
+
+    Section(
+        label="op_loft",
+        text="""\
+## loft — bridge between two or more profiles
+# Each BuildSketch becomes a section; loft() connects them in order. Profiles
+# can differ in shape (rectangle to circle = transition piece).
+from build123d import *
+with BuildPart() as p:
+    with BuildSketch(Plane.XY) as bottom:
+        Rectangle(20, 20)
+    with BuildSketch(Plane.XY.offset(20)) as top:
+        Circle(5)
+    loft()
+result = p.part
+show(result, "transition")""",
+    ),
+
+    Section(
+        label="op_mirror",
+        text="""\
+## mirror — reflect a shape across a plane
+# Build half a symmetric part, then mirror. Faster and less error-prone than
+# building both halves. mirror() does not union — combine with + or BuildPart.
+from build123d import *
+half = Box(10, 5, 3).move(Location((5, 0, 0)))   # off-centre half
+result = half + mirror(half, about=Plane.YZ)
+show(result, "symmetric")""",
+    ),
+
+    Section(
+        label="op_offset",
+        text="""\
+## offset — inset/outset a sketch or shell a solid
+# In BuildSketch, offset(amount=...) grows or shrinks the boundary.
+# On a 3D shape, offset_3d / shell creates a hollow version (walls of thickness).
+from build123d import *
+with BuildSketch() as s:
+    Rectangle(10, 10)
+    offset(amount=2)            # +2 outward; negative inward
+result = thicken(s.sketch, amount=1)   # turn into a 3D shell-base
+show(result, "offset_plate")""",
+    ),
+
+    Section(
+        label="op_thicken",
+        text="""\
+## thicken — turn a 2D face into a solid by adding thickness
+# Common for shell parts where you sketch the surface and add wall thickness.
+from build123d import *
+sketch = Rectangle(20, 10)
+result = thicken(sketch, amount=3)
+show(result, "thickened_plate")""",
+    ),
+
+    Section(
+        label="mode_private",
+        text="""\
+## Mode.PRIVATE — helper geometry that doesn't join the part
+# Useful for construction shapes you want to reference (e.g. for selectors
+# or measurements) without their volume contributing to the final part.
+# Default Mode.ADD unions; Mode.SUBTRACT cuts; Mode.PRIVATE does neither.
+from build123d import *
+with BuildPart() as p:
+    Box(20, 20, 5)
+    helper = Cylinder(3, 5, mode=Mode.PRIVATE)   # for reference only
+    # `helper` exists as a Solid you can query; p.part doesn't include it
+result = p.part
+show(result, "part_unchanged_by_private")""",
     ),
 
     Section(
