@@ -354,8 +354,24 @@ show(result, "part_unchanged_by_private")""",
 ]
 
 
+def _build123d_version_banner() -> str:
+    """Reflect the actually-installed build123d version so callers know exactly
+    which API surface these examples target. The version may differ from the
+    pyproject.toml pin if the user manually overrode it."""
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        v = version("build123d")
+    except PackageNotFoundError:
+        v = "unknown"
+    return (
+        f"Examples below were tested against build123d {v}, the version installed "
+        f"in this environment. If you see API drift (renamed methods, changed "
+        f"signatures), check build123d's CHANGELOG against this version."
+    )
+
+
 def build_quickref_text() -> str:
-    return "\n\n".join(s.text for s in SECTIONS)
+    return _build123d_version_banner() + "\n\n" + "\n\n".join(s.text for s in SECTIONS)
 
 
 RUNNABLE_EXAMPLES: list[tuple[str, str]] = [
