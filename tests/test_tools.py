@@ -360,6 +360,98 @@ def test_render_view_save_to_both_writes_two_files(session, tmp_path, monkeypatc
     assert (tmp_path / "multi.svg").exists()
 
 
+# --- render_view labels ---
+
+def test_render_view_label_objects_renders(session):
+    execute_code(session, "show(Box(10, 10, 10), 'bracket')")
+    execute_code(session, "show(Cylinder(3, 8).move(Location((20, 0, 0))), 'pin')")
+    out = render_view(session, "iso", label_objects=True)
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_label_objects_skips_default_name(session):
+    """Auto-named 'shape' (from bare current_shape) should not produce a label,
+    but the render must still succeed."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    out = render_view(session, "iso", label_objects=True)
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_highlights_face(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    out = render_view(
+        session, "iso",
+        highlights=[{"object": "cube", "type": "face", "index": 0, "label": "top"}],
+    )
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_highlights_edge_and_vertex(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    out = render_view(
+        session, "iso",
+        highlights=[
+            {"object": "cube", "type": "edge", "index": 2, "label": "e2"},
+            {"object": "cube", "type": "vertex", "index": 0, "label": "v0"},
+        ],
+    )
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_highlight_unknown_object_raises(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    with pytest.raises(ValueError, match="unknown object 'ghost'"):
+        render_view(
+            session, "iso",
+            highlights=[{"object": "ghost", "type": "face", "index": 0, "label": "x"}],
+        )
+
+
+def test_render_view_highlight_object_not_in_render_set_raises(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    execute_code(session, "show(Cylinder(3, 5), 'pin')")
+    with pytest.raises(ValueError, match="not in the rendered set"):
+        render_view(
+            session, "iso", objects="cube",
+            highlights=[{"object": "pin", "type": "face", "index": 0, "label": "x"}],
+        )
+
+
+def test_render_view_highlight_index_out_of_range_raises(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    with pytest.raises(ValueError, match="out of range"):
+        render_view(
+            session, "iso",
+            highlights=[{"object": "cube", "type": "face", "index": 99, "label": "x"}],
+        )
+
+
+def test_render_view_highlight_invalid_type_raises(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    with pytest.raises(ValueError, match="type must be"):
+        render_view(
+            session, "iso",
+            highlights=[{"object": "cube", "type": "wire", "index": 0, "label": "x"}],
+        )
+
+
+def test_render_view_highlight_missing_key_raises(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    with pytest.raises(ValueError, match="missing required key"):
+        render_view(
+            session, "iso",
+            highlights=[{"object": "cube", "type": "face", "index": 0}],  # no label
+        )
+
+
+def test_render_view_labels_warn_in_svg(session):
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    out = render_view(session, "iso", format="svg", label_objects=True)
+    assert "svg" in out and "png" not in out
+    assert "label_warnings" in out
+    assert any("PNG" in w for w in out["label_warnings"])
+
+
 # --- measure ---
 
 def test_measure_bounding_box(session):

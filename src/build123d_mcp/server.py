@@ -20,12 +20,13 @@ def execute(code: str) -> str:
 
 
 @mcp.tool()
-def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "", format: str = "png") -> list:
-    """Render model. format: 'png' (raster, default), 'svg' (HLR line drawing — works without a display, no shading but precise edges), or 'both' (returns the PNG and SVG together — useful when you want shaded depth cues plus crisp edge geometry). If the raster path fails (typically headless host with no display backend) and format='png', the server falls back to SVG automatically. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path; for format='both' the PNG and SVG are written as <save_to>.png and <save_to>.svg."""
+def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "", format: str = "png", label_objects: bool = False, highlights: list[dict] | None = None) -> list:
+    """Render model. format: 'png' (raster, default), 'svg' (HLR line drawing — works without a display, no shading but precise edges), or 'both' (returns the PNG and SVG together — useful when you want shaded depth cues plus crisp edge geometry). If the raster path fails (typically headless host with no display backend) and format='png', the server falls back to SVG automatically. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path; for format='both' the PNG and SVG are written as <save_to>.png and <save_to>.svg. label_objects: when true, each named object from show() is labelled at its centroid in the PNG. highlights: optional list of specific entities to label, e.g. [{"object": "bracket", "type": "edge", "index": 5, "label": "hinge_edge"}]; type is 'face', 'edge', or 'vertex' and index matches shape.faces()/edges()/vertices() position. The referenced object must already be registered with show() and included in the rendered set. Labels are PNG-only; SVG output is unlabelled."""
     result = _session.render_view(
         direction=direction, objects=objects, quality=quality,
         clip_plane=clip_plane, clip_at=clip_at, azimuth=azimuth,
         elevation=elevation, save_to=save_to, format=format,
+        label_objects=label_objects, highlights=highlights,
     )
 
     contents: list = []
@@ -48,6 +49,9 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
         contents.append(TextContent(type="text", text=f"PNG render failed: {result['png_error']}"))
     if result.get("png_warnings"):
         for w in result["png_warnings"]:
+            contents.append(TextContent(type="text", text=f"Warning: {w}"))
+    if result.get("label_warnings"):
+        for w in result["label_warnings"]:
             contents.append(TextContent(type="text", text=f"Warning: {w}"))
     return contents
 
