@@ -244,6 +244,8 @@ class WorkerSession:
         elevation: float = 0.0,
         save_to: str = "",
         format: str = "png",
+        label_objects: bool = False,
+        highlights: list[dict] | None = None,
     ) -> dict:
         return self._call(
             "render_view",
@@ -257,6 +259,8 @@ class WorkerSession:
                 "elevation": elevation,
                 "save_to": save_to,
                 "format": format,
+                "label_objects": label_objects,
+                "highlights": highlights,
             },
             self._RENDER_TIMEOUT,
         )

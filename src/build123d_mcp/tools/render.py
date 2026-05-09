@@ -108,7 +108,109 @@ def _camera_direction(direction: str) -> tuple[tuple[float, float, float], tuple
     return (1.0, 1.0, 1.0), (0.0, 0.0, 1.0)  # iso
 
 
-def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation) -> tuple[bytes, list[str]]:
+def _resolve_object_labels(shapes) -> list[tuple[tuple[float, float, float], str]]:
+    """Return [(position, name)] for each rendered shape with a non-default name."""
+    out = []
+    for name, shape, _color in shapes:
+        if not name or name == "shape":
+            # auto-name from bare current_shape — labelling it "shape" adds noise
+            continue
+        try:
+            c = shape.center()
+            out.append(((c.X, c.Y, c.Z), name))
+        except Exception:
+            try:
+                bb = shape.bounding_box()
+                c = bb.center
+                out.append(((c.X, c.Y, c.Z), name))
+            except Exception:
+                pass
+    return out
+
+
+def _resolve_highlights(session, shapes, highlights) -> list[tuple[tuple[float, float, float], str]]:
+    """Validate and resolve highlight specs to [(position, label)].
+
+    Each highlight must be a dict with keys: object, type, index, label.
+    Raises ValueError for any malformed or unresolvable entry.
+    """
+    if not highlights:
+        return []
+    rendered_names = {name for name, _, _ in shapes}
+    out = []
+    for h in highlights:
+        if not isinstance(h, dict):
+            raise ValueError(f"highlight must be a dict, got {type(h).__name__}: {h!r}")
+        missing = [k for k in ("object", "type", "index", "label") if k not in h]
+        if missing:
+            raise ValueError(f"highlight missing required key(s) {missing}: {h!r}")
+        obj_name = h["object"]
+        ent_type = h["type"]
+        index = h["index"]
+        label = str(h["label"])
+
+        if obj_name not in session.objects:
+            raise ValueError(
+                f"highlight references unknown object '{obj_name}'. "
+                f"Register it first with show(shape, '{obj_name}')."
+            )
+        if obj_name not in rendered_names:
+            raise ValueError(
+                f"highlight references '{obj_name}' which is registered but not in the rendered set. "
+                f"Add it to objects= or omit the highlight."
+            )
+        if ent_type not in ("face", "edge", "vertex"):
+            raise ValueError(f"highlight type must be 'face', 'edge', or 'vertex', got '{ent_type}'")
+        if not isinstance(index, int):
+            raise ValueError(f"highlight index must be int, got {type(index).__name__}: {index!r}")
+
+        shape = session.objects[obj_name]
+        items = {"face": shape.faces(), "edge": shape.edges(), "vertex": shape.vertices()}[ent_type]
+        n = len(items)
+        if not (0 <= index < n):
+            raise ValueError(
+                f"highlight {ent_type} index {index} out of range for '{obj_name}' (valid: 0..{n - 1})"
+            )
+        entity = items[index]
+        try:
+            c = entity.center()
+            position = (c.X, c.Y, c.Z)
+        except Exception:
+            try:
+                position = (entity.X, entity.Y, entity.Z)
+            except Exception as exc:
+                raise ValueError(
+                    f"could not compute position for {obj_name}.{ent_type}[{index}]: {exc}"
+                )
+        out.append((position, label))
+    return out
+
+
+def _add_label_actors(renderer, labels) -> None:
+    """Add billboard text actors at each (position, text) pair.
+
+    The renderer should be a depth-cleared overlay layer so labels at interior
+    points (e.g. a solid's centroid) aren't occluded by the geometry.
+    """
+    if not labels:
+        return
+    import vtk
+    for position, text in labels:
+        actor = vtk.vtkBillboardTextActor3D()
+        actor.SetPosition(*position)
+        actor.SetInput(str(text))
+        prop = actor.GetTextProperty()
+        prop.SetFontSize(16)
+        prop.SetColor(0.0, 0.0, 0.0)
+        prop.SetBold(True)
+        prop.SetBackgroundColor(1.0, 1.0, 1.0)
+        prop.SetBackgroundOpacity(0.85)
+        prop.SetFrame(True)
+        prop.SetFrameColor(0.2, 0.2, 0.2)
+        renderer.AddActor(actor)
+
+
+def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevation, labels=None) -> tuple[bytes, list[str]]:
     import tempfile
     import vtk
 
@@ -121,6 +223,17 @@ def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevat
     render_window.SetOffScreenRendering(1)
     render_window.SetSize(800, 600)
     render_window.AddRenderer(renderer)
+
+    # Labels live on an overlay renderer that draws after the depth buffer is
+    # cleared, so a label sitting at a solid's centroid stays readable instead
+    # of being occluded by the surrounding geometry.
+    label_renderer = None
+    if labels:
+        label_renderer = vtk.vtkRenderer()
+        label_renderer.SetActiveCamera(renderer.GetActiveCamera())
+        label_renderer.SetLayer(1)
+        render_window.SetNumberOfLayers(2)
+        render_window.AddRenderer(label_renderer)
 
     failed: list[str] = []
     actor_count = 0
@@ -201,6 +314,9 @@ def _do_render_png(shapes, tess, direction, clip_plane, clip_at, azimuth, elevat
     if actor_count == 0:
         msg = "All shapes failed to tessellate: " + "; ".join(failed) if failed else "No geometry to render"
         raise RuntimeError(msg)
+
+    if label_renderer is not None:
+        _add_label_actors(label_renderer, labels)
 
     # Camera setup
     camera = renderer.GetActiveCamera()
@@ -361,6 +477,8 @@ def render_view(
     elevation: float = 0.0,
     save_to: str = "",
     format: str = "png",
+    label_objects: bool = False,
+    highlights: list[dict] | None = None,
 ) -> dict:
     """Render the active session geometry.
 
@@ -391,12 +509,24 @@ def render_view(
     shapes = _resolve_shapes(session, objects)
     tess = _QUALITY[quality]
 
+    # Resolve labels up-front so validation errors surface before any rendering work.
+    labels: list[tuple[tuple[float, float, float], str]] = []
+    if label_objects:
+        labels.extend(_resolve_object_labels(shapes))
+    labels.extend(_resolve_highlights(session, shapes, highlights))
+
     result: dict = {}
+
+    if (label_objects or highlights) and format in ("svg", "both"):
+        result["label_warnings"] = [
+            "Labels are only rendered in PNG output; SVG output is unlabelled."
+        ]
 
     if format in ("png", "both"):
         try:
             png_bytes, png_failed = _do_render_png(
                 shapes, tess, direction, clip_plane, clip_at, azimuth, elevation,
+                labels=labels,
             )
             result["png"] = png_bytes
             if png_failed:
