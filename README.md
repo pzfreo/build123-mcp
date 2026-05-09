@@ -54,6 +54,7 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 Read-only MCP resources available to LLM clients:
 
 - `build123d://quickref` — build123d API quick reference (primitives, booleans, positioning, selectors, fillets)
+- `build123d://selectors` — task-indexed selector cookbook (get the top face, find circular edges, filter by area/length/radius, `Select.LAST` in builder context, fillet detection)
 - `build123d://session` — live session state as JSON (current shape, named objects, snapshots, variables)
 - `build123d://bd_warehouse` — catalogue of pre-built parametric parts from bd_warehouse (bearings, fasteners, gears, pipes, threads, and more)
 
