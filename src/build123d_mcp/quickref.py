@@ -189,6 +189,41 @@ result = p.part""",
     ),
 
     Section(
+        label="joints_rigid",
+        text="""\
+## Joints — assembly relationships
+# Joints express how parts CONNECT, not just where they happen to sit. Move the
+# parent, the child follows. Reach for joints when building assemblies — they
+# scale better than raw .move() because the relationship survives changes.
+from build123d import *
+plate = Box(20, 20, 5)
+RigidJoint("mount", to_part=plate, joint_location=Location((0, 0, 2.5)))
+
+pin = Box(2, 2, 10)
+RigidJoint("base", to_part=pin, joint_location=Location((0, 0, -5)))
+
+# Snap pin's "base" joint to plate's "mount" joint. pin is now positioned
+# so its joint coincides with the plate's. Move plate later → pin follows.
+plate.joints["mount"].connect_to(pin.joints["base"])
+show(plate, "plate")
+show(pin, "pin")""",
+    ),
+
+    Section(
+        text="""\
+## Joint types
+RigidJoint(label, to_part, joint_location)              # fixed (no DOF)
+RevoluteJoint(label, to_part, axis, angular_range)      # hinge (1 rotation)
+LinearJoint(label, to_part, axis, linear_range)         # slider (1 translation)
+CylindricalJoint(label, to_part, axis, ...)             # rotate + translate same axis
+BallJoint(label, to_part, joint_location, angular_range) # 3 rotations, 0 translations
+
+# For movable joints, pass position/angle to connect_to() to set the configuration:
+#   plate.joints["hinge"].connect_to(arm.joints["pivot"], angle=45)
+#   rail.joints["slot"].connect_to(carriage.joints["slide"], position=10)""",
+    ),
+
+    Section(
         text="""\
 ## MCP server conventions
 - Name the final shape 'result' OR call show() — both trigger current_shape auto-detection
