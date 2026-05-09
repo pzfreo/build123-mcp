@@ -159,6 +159,12 @@ Export a shape to a file.
 
 STEP preserves exact geometry for downstream CAD tools. STL is for mesh-based workflows (3D printing, slicers, GitHub preview).
 
+STEP exports carry session names as labels so downstream CAD tools see structured assemblies with named bodies:
+- `export("part.step", object_name="bracket")` — body labelled `bracket`
+- `export("asm.step", object_name="*")` — Compound labelled `assembly` containing each named child (`bracket`, `pin`, etc.)
+
+Labels are set on copies — your session shapes are not mutated.
+
 ---
 
 ### `interference`
