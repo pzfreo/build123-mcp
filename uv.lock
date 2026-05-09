@@ -118,7 +118,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bd-warehouse" },
-    { name = "build123d" },
+    { name = "build123d", specifier = ">=0.10,<0.11" },
     { name = "mcp" },
 ]
 

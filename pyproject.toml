@@ -18,7 +18,9 @@ classifiers = [
 ]
 dependencies = [
     "mcp",
-    "build123d",
+    # build123d is pre-1.0 and 0.x minor bumps may break the API.
+    # Soft pin to the tested-against major+minor; bump deliberately.
+    "build123d>=0.10,<0.11",
     "bd_warehouse",
 ]
 

@@ -329,8 +329,8 @@ Read-only resources that LLM clients can fetch without spending a tool-call roun
 
 | URI | MIME type | Contents |
 |-----|-----------|----------|
-| `build123d://quickref` | `text/plain` | build123d API quick reference: primitives, booleans, positioning, sketch-to-3D, selectors, fillets. Every example is tested on each release. |
-| `build123d://selectors` | `text/plain` | Task-indexed selector cookbook: get the top face, find circular edges, filter by area/length/radius, `Select.LAST` in builder context, fillet detection, and the operator shortcuts. Every example is tested. |
+| `build123d://quickref` | `text/plain` | build123d API quick reference: primitives, booleans, positioning, sketch-to-3D, selectors, fillets. Every example is tested on each release. Top of the resource shows the installed build123d version the examples were tested against. |
+| `build123d://selectors` | `text/plain` | Task-indexed selector cookbook: get the top face, find circular edges, filter by area/length/radius, `Select.LAST` in builder context, fillet detection, and the operator shortcuts. Every example is tested. Top of the resource shows the installed build123d version. |
 | `build123d://session` | `application/json` | Live session state: current shape diagnostics, named objects, snapshots, and Python namespace variables. Equivalent to calling `session_state()`. |
 | `build123d://bd_warehouse` | `text/plain` | Catalogue of pre-built parametric parts from bd_warehouse: bearings, fasteners, gears, pipes, sprockets, threads. Includes class names, descriptions, constructor signatures, and available sizes. |
 

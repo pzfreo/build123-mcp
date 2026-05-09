@@ -58,6 +58,8 @@ Read-only MCP resources available to LLM clients:
 - `build123d://session` — live session state as JSON (current shape, named objects, snapshots, variables)
 - `build123d://bd_warehouse` — catalogue of pre-built parametric parts from bd_warehouse (bearings, fasteners, gears, pipes, threads, and more)
 
+> **build123d version**: examples in `quickref` and `selectors` are tested against build123d 0.10.x (soft-pinned in `pyproject.toml` as `>=0.10,<0.11`). The exact installed version is reported at the top of each resource. If you need a different build123d version, override the dependency and verify the examples still match the API.
+
 ## Prompts
 
 - `start-cad-session` — primes a new CAD design session with the task description and step-by-step workflow reminders
