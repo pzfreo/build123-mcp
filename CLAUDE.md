@@ -69,3 +69,13 @@ Known limits: memory exhaustion is not bounded; Python introspection chains can 
 - `show()` stores shapes by reference; mutating the shape object after calling `show()` will affect the stored object.
 - Clip plane in `render_view` slices at the mesh's own bounding-box midpoint, not world origin.
 - Interference uses a 1 × 10⁻⁶ mm³ volume threshold to ignore floating-point noise.
+
+## Releasing
+
+**Cutting a release means one command:** `gh release create vX.Y.Z --generate-notes` (or use the GitHub Release UI). That triggers the `Publish` workflow which builds, uploads to PyPI, and auto-bumps `pyproject.toml` to the next `.dev0` version. Nothing else is needed.
+
+**Never edit `pyproject.toml` manually. Never push tags manually.** Manual edits/tags don't trigger the publish workflow and create orphan tags + version drift. If you see `pyproject.toml` showing `0.3.14.dev0`, that means `0.3.13` is the current PyPI release and `0.3.14` is the next planned release; don't "fix" the version.
+
+**Version convention:** between releases, `pyproject.toml` carries a `.dev0` suffix (PEP 440 dev release). `0.3.12 < 0.3.13.dev0 < 0.3.13.dev99 < 0.3.13` — TestPyPI builds (`.devN`) are always newer than the last published release but older than the eventual real release.
+
+**Before cutting a release:** make sure `CHANGELOG.md`'s top entry matches the version you're about to release (strip the `.dev0` suffix mentally — `pyproject.toml = 0.3.14.dev0` means you're cutting `v0.3.14`).

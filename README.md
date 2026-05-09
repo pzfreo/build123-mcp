@@ -26,7 +26,7 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 - `last_error` — details of the last failed `execute()`: type, message, line number, and code excerpt
 
 **Viewing**
-- `render_view` — render one or more shapes as PNG or SVG; supports assembly compositing, high-quality tessellation, and cross-section clip planes
+- `render_view` — render one or more shapes as PNG or SVG; supports assembly compositing, high-quality tessellation, cross-section clip planes, and optional labels for named shapes or specific faces/edges
 
 **Import / export**
 - `export` — export as STEP, STL, or both in one call; targets a named object, the current shape, or `*` for all objects as an assembly
