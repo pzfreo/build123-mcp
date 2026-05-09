@@ -96,32 +96,6 @@ rotated = shape.move(Location((5, 0, 0), (0, 0, 45)))""",
     ),
 
     Section(
-        label="locations",
-        text="""\
-# Place multiple instances inside BuildPart
-from build123d import *
-with BuildPart() as p:
-    Box(30, 30, 8)
-    with Locations((10, 0, 0), (-10, 0, 0)):
-        Cylinder(2, 10, mode=Mode.SUBTRACT)
-result = p.part
-
-from build123d import *
-with BuildPart() as p:
-    Box(40, 40, 8)
-    with GridLocations(12, 12, 3, 3):
-        Cylinder(2, 10, mode=Mode.SUBTRACT)
-result = p.part
-
-from build123d import *
-with BuildPart() as p:
-    Box(40, 40, 8)
-    with PolarLocations(12, 6):
-        Cylinder(2, 10, mode=Mode.SUBTRACT)
-result = p.part""",
-    ),
-
-    Section(
         label="extrude",
         text="""\
 ## Sketch → solid (requires BuildPart)
@@ -145,20 +119,6 @@ with BuildPart() as p:
         with Locations((12, 0)):
             Rectangle(4, 8)
     revolve(axis=Axis.Z)                 # full 360°
-result = p.part""",
-    ),
-
-    Section(
-        label="loft",
-        text="""\
-# Loft between two profiles
-from build123d import *
-with BuildPart() as p:
-    with BuildSketch(Plane.XY) as s1:
-        Rectangle(10, 10)
-    with BuildSketch(Plane.XY.offset(15)) as s2:
-        Circle(4)
-    loft()
 result = p.part""",
     ),
 
