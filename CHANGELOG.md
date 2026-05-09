@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.14
+
+This release is "more build123d native" — every change closes a gap where the server was a generic Python sandbox rather than a build123d-aware tool. Five merged PRs:
+
+### Features
+
+- **`render_view` labels** (#73): two new optional parameters. `label_objects=True` labels each named object from `show()` at its centroid in the PNG. `highlights=[{"object", "type", "index", "label"}, ...]` labels specific faces, edges, or vertices by index — useful for confirming "edge 5 is the one I want to fillet" before committing to an operation. Labels render on a depth-cleared overlay layer so they stay legible even at a solid's interior centroid. SVG output is unlabelled (a `label_warnings` entry surfaces this).
+- **`build123d://selectors` MCP resource** (#76): a task-indexed selector cookbook, separate from `quickref`'s API-shaped reference. 15 runnable examples covering the drill-down idiom (parent → child topology), cardinal selection, geom-type filters, parallel/perpendicular orientation, numeric properties, `Select.LAST` in builder context, fillet detection (`is_circular_convex`/`is_circular_concave`), and more — plus an operator translation card (`>`, `<`, `|`, `>>`, `<<`, `@`) and a pitfalls section.
+- **Compound-aware STEP export** (#77): single-object exports carry `object_name` as the body label; `*` exports produce a `Compound` labelled `assembly` with each child labelled by its `show()` name. Downstream CAD tools (FreeCAD, Fusion) now see structured assemblies with named bodies instead of "Body 1, Body 2, …".
+
+### Documentation (LLM behaviour-shaping)
+
+- **Joints guidance** (#75): `quickref` gains a runnable `RigidJoint` example plus a reference card listing all joint types (`RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint`). `workflow_hints()`, `start-cad-session`, and `llms.md` all nudge toward joints for assemblies with mechanical relationships, instead of raw `.move()`/`Location()`. Docs-only — no new MCP tool — keeps LLM-generated code idiomatic and portable outside the MCP.
+- **Five more native idioms in `quickref`** (#78): pattern-placement utilities (`GridLocations`, `PolarLocations`, `Locations` with task-indexed naming), the `@` and `%` operators on edges for chaining curves without coordinate duplication, the broader operations set (`sweep`, `loft`, `mirror`, `offset`, `thicken`), and `Mode.PRIVATE` for helper geometry that doesn't join the part. The two top-level patterns are renamed using build123d's own terminology — algebra mode and builder mode. Each example was verified end-to-end before being added to the `Section` dataclass.
+
+### Release process
+
+- **build123d version is now explicit** (#79): `pyproject.toml` soft-pins build123d as `>=0.10,<0.11` (build123d is pre-1.0, so minor bumps may break the API). The `build123d://quickref` and `build123d://selectors` resources prepend a runtime banner showing the actually-installed version via `importlib.metadata.version`, so the docs are self-describing about their compatibility window — if a user overrides the pin, the banner reflects what they really have.
+
+---
+
 ## v0.3.13
 
 ### Features
