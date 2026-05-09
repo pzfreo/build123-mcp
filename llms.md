@@ -311,6 +311,8 @@ Clear the session back to empty state, including all snapshots.
 12. Repeat 6–11 until satisfied
 13. `export` — write STEP + STL in one call with `format="step,stl"`
 
+For assemblies of two or more parts with a mechanical relationship (mounted, hinged, sliding), use build123d Joints (`RigidJoint`/`RevoluteJoint`/`LinearJoint`/`CylindricalJoint`/`BallJoint`) rather than positioning parts with `.move()`. The relationship survives later changes to the parent. See `build123d://quickref` for examples.
+
 ---
 
 ---
@@ -384,5 +386,6 @@ All units are millimetres by default.
 - **Dirty session:** unexpected results often mean leftover state. Call `reset` first, or `session_state` to inspect what's active.
 - **Boolean succeeded but geometry is wrong:** always call `measure()` after a boolean and check `topology.faces` — a failed cut leaves counts unchanged.
 - **Using render_view as geometric proof:** renders can look correct even when geometry is wrong. Use `measure()` to verify numerically first.
+- **Assembling with raw `.move()` instead of joints:** placing parts by absolute position works once but breaks the moment anything changes — the child has no relationship to the parent. Use `RigidJoint`/`RevoluteJoint`/etc. so the relationship is preserved.
 - **Failed execute advancing state:** it doesn't — failed code preserves the previous `current_shape`.
 - **Library tools without --library:** `search_library` and `load_part` return an error if the server wasn't started with `--library PATH`.

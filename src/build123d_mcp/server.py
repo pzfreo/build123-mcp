@@ -244,6 +244,20 @@ BUILD123D-MCP WORKFLOW GUIDE
    position, always render by name to avoid Z-fighting (striped colour artifacts).
    STL imports produce a shell (volume=0); render_view and measure work, but interference()
    and boolean operations require a solid.
+
+12. ASSEMBLIES — USE JOINTS, NOT JUST .move()
+   For assemblies of two or more parts that have a real mechanical relationship
+   (mounted on, hinged to, slides along), reach for build123d Joints rather than
+   positioning parts with .move() / Location(). RigidJoint expresses a fixed
+   mount; RevoluteJoint a hinge; LinearJoint a slider; CylindricalJoint
+   rotate-and-slide; BallJoint a 3-axis pivot.
+   The benefit: move the parent later, the child follows. With raw .move() the
+   relationship is lost.
+   Pattern (rigid mount):
+     RigidJoint("mount", to_part=plate, joint_location=Location((0, 0, 2.5)))
+     RigidJoint("base",  to_part=pin,   joint_location=Location((0, 0, -5)))
+     plate.joints["mount"].connect_to(pin.joints["base"])
+   See build123d://quickref for joint type details and movable-joint examples.
 """
 
 
@@ -292,7 +306,10 @@ Workflow:
 5. Use show(shape, "name") to register important intermediate shapes; it prints vol + face count immediately.
 6. Call render_view() only after measure() confirms the geometry is correct.
 7. Call save_snapshot("name") before any experiment you might want to undo.
-8. When complete: export("part", "step,stl").
+8. For assemblies of two or more parts with a mechanical relationship (mounted, hinged, sliding),
+   use Joints (RigidJoint/RevoluteJoint/LinearJoint/CylindricalJoint/BallJoint) rather than raw
+   .move() — the relationship survives later changes. See build123d://quickref for examples.
+9. When complete: export("part", "step,stl").
 
 Read the build123d://quickref resource before writing execute() code — it has accurate API syntax.
 Read the build123d://bd_warehouse resource for fastener/bearing/thread catalogue and usage patterns.
