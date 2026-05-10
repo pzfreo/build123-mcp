@@ -653,6 +653,60 @@ def test_clearance_unknown_object_raises(session):
         clearance(session, "a", "missing")
 
 
+def test_clearance_apart_status(session):
+    """Two boxes with a gap: status=apart, clearance is the gap."""
+    from build123d_mcp.tools.measure import clearance
+    execute_code(session, "show(Box(10,10,10), 'a')")
+    execute_code(session, "show(Box(5,5,5).move(Location((20,0,0))), 'b')")
+    data = json.loads(clearance(session, "a", "b"))
+    assert data["status"] == "apart"
+    assert data["containment"] == "neither"
+    assert data["clearance"] > 0
+    assert data["intersection_volume"] == 0.0
+
+
+def test_clearance_touching_status(session):
+    """Two boxes sharing a face: status=touching, clearance=0, no overlap."""
+    from build123d_mcp.tools.measure import clearance
+    execute_code(session, "show(Box(10,10,10), 'a')")
+    execute_code(session, "show(Box(10,10,10).move(Location((10,0,0))), 'b')")
+    data = json.loads(clearance(session, "a", "b"))
+    assert data["status"] == "touching"
+    assert data["clearance"] < 1e-6
+    assert data["intersection_volume"] < 1e-6
+
+
+def test_clearance_containing_reports_wall_thickness(session):
+    """Pocket-style: cylinder fully inside plate. status=containing,
+    clearance is the smallest gap from cylinder surface to plate exterior
+    (= wall thickness in the worst direction)."""
+    from build123d_mcp.tools.measure import clearance
+    execute_code(session, "show(Box(40, 20, 10), 'plate')")
+    execute_code(session, "show(Cylinder(3, 5).move(Location((10, 0, 0))), 'pocket')")
+    data = json.loads(clearance(session, "pocket", "plate"))
+    assert data["status"] == "containing"
+    assert data["containment"] == "a_in_b"  # pocket inside plate
+    # Wall thickness: pocket z range [-2.5, 2.5], plate z range [-5, 5] → gap 2.5 each side
+    assert abs(data["clearance"] - 2.5) < 0.01
+    assert data["intersection_volume"] > 0  # pocket overlaps with plate by its own volume
+    assert data["a_volume_outside_b"] < 1e-6  # pocket entirely inside plate
+
+
+def test_clearance_interpenetrating_flags_wall_pierce(session):
+    """The wall-piercing scenario: pocket pokes out of plate. The signal that
+    matters is a_volume_outside_b > 0 — that's the volume of the pocket
+    extending beyond the plate's outer surface."""
+    from build123d_mcp.tools.measure import clearance
+    execute_code(session, "show(Box(40, 20, 5), 'plate')")
+    execute_code(session, "show(Cylinder(3, 10).move(Location((10, 0, 0))), 'pocket')")
+    data = json.loads(clearance(session, "pocket", "plate"))
+    assert data["status"] == "interpenetrating"
+    assert data["containment"] == "neither"
+    assert data["clearance"] < 1e-6
+    assert data["intersection_volume"] > 0
+    assert data["a_volume_outside_b"] > 0  # pocket pierces plate
+
+
 # --- export ---
 
 def test_export_step(session, tmp_path, monkeypatch):

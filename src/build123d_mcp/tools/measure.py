@@ -203,8 +203,66 @@ def measure(session, object_name: str = "") -> str:
 
 
 def clearance(session, object_a: str, object_b: str) -> str:
+    """Spatial relationship between two named shapes.
+
+    Returns the literal min-surface-to-min-surface distance plus a `status`
+    that disambiguates the four cases the same distance value can mean:
+
+      apart            — surfaces don't touch; clearance = gap (mm)
+      containing       — one shape fully inside the other; clearance = wall thickness
+                         (smallest gap from inner surface to outer hull)
+      touching         — surfaces meet exactly; clearance = 0, no overlap volume
+      interpenetrating — partial overlap; clearance = 0, both shapes have volume
+                         outside the other (the wall-piercing case)
+
+    Always reports intersection_volume + a_volume_outside_b + b_volume_outside_a
+    so the LLM can reason about the magnitude of overlap without a second call.
+    """
     for name in (object_a, object_b):
         if name not in session.objects:
             raise ValueError(f"Unknown object '{name}'. Registered: {list(session.objects.keys())}")
-    dist = session.objects[object_a].distance_to(session.objects[object_b])
-    return json.dumps({"clearance": dist}, indent=2)
+    a = session.objects[object_a]
+    b = session.objects[object_b]
+
+    dist = a.distance_to(b)
+
+    # Boolean ops for containment / overlap detection. Each can fail for
+    # degenerate or non-solid shapes; None means "couldn't tell".
+    def _safe_volume(op):
+        try:
+            return op().volume
+        except Exception:
+            return None
+
+    a_outside_b = _safe_volume(lambda: a - b)
+    b_outside_a = _safe_volume(lambda: b - a)
+    intersection = _safe_volume(lambda: a & b)
+
+    a_in_b = a_outside_b is not None and a_outside_b < 1e-6
+    b_in_a = b_outside_a is not None and b_outside_a < 1e-6
+    overlapping = intersection is not None and intersection > 1e-6
+
+    if a_in_b:
+        containment = "a_in_b"
+    elif b_in_a:
+        containment = "b_in_a"
+    else:
+        containment = "neither"
+
+    if a_in_b or b_in_a:
+        status = "containing"
+    elif overlapping:
+        status = "interpenetrating"
+    elif dist < 1e-9:
+        status = "touching"
+    else:
+        status = "apart"
+
+    return json.dumps({
+        "clearance": dist,
+        "status": status,
+        "containment": containment,
+        "intersection_volume": intersection if intersection is not None else 0.0,
+        "a_volume_outside_b": a_outside_b,
+        "b_volume_outside_a": b_outside_a,
+    }, indent=2)
