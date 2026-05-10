@@ -633,7 +633,18 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
     with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         svg_path = _os.path.join(tmpdir, "drawing.svg")
         exporter.write(svg_path)
-        return cairosvg.svg2png(url=svg_path, output_width=1200, background_color="white")
+        try:
+            return cairosvg.svg2png(url=svg_path, output_width=1200, background_color="white")
+        except OSError as exc:
+            # cairosvg can't find the cairo native library. Surface a
+            # specific, actionable error so the user knows what to install.
+            raise RuntimeError(
+                "2D PNG rendering requires the cairo native library. "
+                "Install it: 'brew install cairo' (macOS), "
+                "'apt-get install libcairo2' (Debian/Ubuntu), "
+                "or use the GTK runtime on Windows. "
+                "Underlying error: " + str(exc)
+            ) from exc
 
 
 def render_view(
