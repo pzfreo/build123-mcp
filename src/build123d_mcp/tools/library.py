@@ -45,7 +45,17 @@ class _LibraryIndex:
 
     def _scan(self):
         new_index = {}
+        # Track the largest mtime we observe so _last_scan is provably >=
+        # everything we just indexed. Without this, Windows file-mtime
+        # granularity (NTFS rounds mtime up; time.time() returns the raw
+        # clock) can leave dir mtimes > time.time() at scan completion,
+        # making _needs_rescan() return True on the very next call. See #99.
+        max_mtime = 0.0
         for dirpath, _, filenames in os.walk(self.library_path):
+            try:
+                max_mtime = max(max_mtime, os.path.getmtime(dirpath))
+            except OSError:
+                pass
             for filename in sorted(filenames):
                 if not filename.endswith(".py"):
                     continue
@@ -60,17 +70,19 @@ class _LibraryIndex:
                     info = _extract_part_info(source)
                 except Exception as e:
                     info = {"description": f"Error reading part: {e}", "tags": [], "parameters": {}}
+                file_mtime = os.path.getmtime(filepath)
+                max_mtime = max(max_mtime, file_mtime)
                 new_index[name] = {
                     "name": name,
                     "category": category,
                     "path": filepath,
-                    "mtime": os.path.getmtime(filepath),
+                    "mtime": file_mtime,
                     "description": info.get("description", ""),
                     "tags": info.get("tags", []),
                     "parameters": info.get("parameters", {}),
                 }
         self._index = new_index
-        self._last_scan = time.time()
+        self._last_scan = max(time.time(), max_mtime)
 
     def search(self, query: str) -> list:
         self.ensure_fresh()
