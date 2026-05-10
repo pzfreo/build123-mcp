@@ -63,21 +63,91 @@ class Session:
 
         self.namespace["named_face"] = named_face
 
-    def _quick_diagnostics(self, shape) -> str:
+    def _shape_summary(self, shape) -> dict | None:
+        """Pull volume/bbox/topology from a shape; None if anything errors."""
         try:
             bb = shape.bounding_box()
-            vol = shape.volume
-            faces = len(shape.faces())
-            edges = len(shape.edges())
-            verts = len(shape.vertices())
-            return (
-                f"--- current_shape ---\n"
-                f"volume: {vol:.4g} mm³  |  "
-                f"bbox: {bb.size.X:.4g}×{bb.size.Y:.4g}×{bb.size.Z:.4g} mm  |  "
-                f"{faces}f {edges}e {verts}v"
-            )
+            return {
+                "vol": shape.volume,
+                "size_x": bb.size.X, "size_y": bb.size.Y, "size_z": bb.size.Z,
+                "center_x": bb.center().X, "center_y": bb.center().Y, "center_z": bb.center().Z,
+                "faces": len(shape.faces()),
+                "edges": len(shape.edges()),
+                "verts": len(shape.vertices()),
+            }
         except Exception:
-            return ""
+            return None
+
+    def _diagnose_change(self, shape, before) -> tuple[str, list[str]]:
+        """Format the current_shape diagnostic line, with deltas vs `before`
+        when available, plus warnings for two specific silent-failure modes:
+        boolean no-op and degenerate (zero-volume) result."""
+        after = self._shape_summary(shape)
+        if after is None:
+            return "", []
+
+        before_summary = self._shape_summary(before) if before is not None else None
+
+        if before_summary is None:
+            diag = (
+                f"--- current_shape ---\n"
+                f"volume: {after['vol']:.4g} mm³  |  "
+                f"bbox: {after['size_x']:.4g}×{after['size_y']:.4g}×{after['size_z']:.4g} mm  |  "
+                f"{after['faces']}f {after['edges']}e {after['verts']}v"
+            )
+            return diag, []
+
+        b = before_summary
+        a = after
+        dvol = a["vol"] - b["vol"]
+        dpct = (dvol / b["vol"] * 100) if abs(b["vol"]) > 1e-9 else None
+
+        def fmt_int_delta(d: int) -> str:
+            return "" if d == 0 else f" ({d:+d})"
+
+        def fmt_vol_delta(d: float, pct: float | None) -> str:
+            if abs(d) < 1e-9:
+                return ""
+            if pct is None:
+                return f" ({d:+.3g})"
+            return f" ({d:+.3g}, {pct:+.1f}%)"
+
+        diag = (
+            f"--- current_shape ---\n"
+            f"volume: {a['vol']:.4g}{fmt_vol_delta(dvol, dpct)} mm³  |  "
+            f"bbox: {a['size_x']:.4g}×{a['size_y']:.4g}×{a['size_z']:.4g} mm  |  "
+            f"{a['faces']}f{fmt_int_delta(a['faces'] - b['faces'])} "
+            f"{a['edges']}e{fmt_int_delta(a['edges'] - b['edges'])} "
+            f"{a['verts']}v{fmt_int_delta(a['verts'] - b['verts'])}"
+        )
+
+        warnings: list[str] = []
+
+        # Boolean no-op: shape was rebound (different object) but every
+        # measurable property is bit-identical. Likely the boolean missed.
+        identical = (
+            shape is not before
+            and a["vol"] == b["vol"]
+            and a["faces"] == b["faces"]
+            and a["edges"] == b["edges"]
+            and a["verts"] == b["verts"]
+            and a["size_x"] == b["size_x"] and a["size_y"] == b["size_y"] and a["size_z"] == b["size_z"]
+            and a["center_x"] == b["center_x"] and a["center_y"] == b["center_y"] and a["center_z"] == b["center_z"]
+        )
+        if identical:
+            warnings.append(
+                "Warning: shape was rebound but volume/topology/bbox unchanged "
+                "— boolean may have missed (no intersection?)"
+            )
+
+        # Degenerate: previously had volume, now ≈ 0. Failed loft/extrude/intersection.
+        if b["vol"] > 1e-9 and a["vol"] < 1e-9:
+            warnings.append(
+                "Warning: resulting shape has volume ≈ 0 — degenerate "
+                "(failed loft/extrude/intersection?)"
+            )
+
+        return diag, warnings
 
     def execute(self, code: str) -> str:
         # Layer 1: AST check before anything runs
@@ -163,9 +233,11 @@ class Session:
 
         output = buf.getvalue() or "OK"
         if self.current_shape is not None and self.current_shape is not shape_before:
-            diag = self._quick_diagnostics(self.current_shape)
+            diag, warnings = self._diagnose_change(self.current_shape, shape_before)
             if diag:
                 output = output.rstrip("\n") + "\n" + diag
+            for w in warnings:
+                output += "\n" + w
         return output
 
     def _rollback_namespace(self, values_before: dict[str, Any]) -> None:

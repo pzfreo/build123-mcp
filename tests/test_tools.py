@@ -80,6 +80,71 @@ def test_execute_detects_buildpart(session):
     assert session.current_shape is not None
 
 
+# --- execute() diagnostics: deltas + anomaly warnings ---
+
+def test_execute_first_shape_shows_absolutes_no_warnings(session):
+    """First shape ever: no previous to diff against, so no delta and no warnings."""
+    out = execute_code(session, "result = Box(10, 10, 5)")
+    assert "current_shape" in out
+    assert "500" in out  # volume
+    assert "Warning:" not in out
+    # No delta markers
+    assert "(+" not in out and "(-" not in out
+
+
+def test_execute_real_cut_shows_deltas(session):
+    """A successful boolean cut shows the volume and topology deltas inline."""
+    execute_code(session, "result = Box(10, 10, 5)")
+    out = execute_code(session, "result = result - Cylinder(2, 5)")
+    # Volume dropped, faces increased — delta markers should appear
+    assert "(-" in out  # volume decreased
+    assert "(+" in out  # faces increased
+    assert "%" in out   # percentage delta on volume
+    assert "Warning:" not in out
+
+
+def test_execute_warns_on_boolean_noop(session):
+    """A boolean that produces no change (cylinder placed far away) triggers the
+    no-op warning so the LLM can't silently sail past a failed cut."""
+    execute_code(session, "result = Box(10, 10, 5)")
+    out = execute_code(
+        session,
+        "result = result - Cylinder(2, 5).move(Location((100, 100, 100)))",
+    )
+    assert "Warning:" in out
+    assert "boolean may have missed" in out
+
+
+def test_execute_warns_on_degenerate(session):
+    """Intersection that produces an empty result triggers the degenerate warning."""
+    execute_code(session, "result = Box(10, 10, 5)")
+    out = execute_code(
+        session,
+        "result = result & Cylinder(1, 1).move(Location((100, 100, 100)))",
+    )
+    assert "Warning:" in out
+    assert "volume" in out and "0" in out
+    assert "degenerate" in out
+
+
+def test_execute_move_does_not_warn(session):
+    """A pure translation changes bbox center, not size/topology/volume — must
+    not trigger the no-op warning."""
+    execute_code(session, "result = Box(10, 10, 5)")
+    out = execute_code(session, "result = result.move(Location((50, 0, 0)))")
+    assert "Warning:" not in out
+
+
+def test_execute_no_warnings_when_shape_unchanged(session):
+    """If execute doesn't change current_shape (e.g. just printing), no
+    diagnostic block at all — no warnings, no deltas."""
+    execute_code(session, "result = Box(10, 10, 5)")
+    out = execute_code(session, "print('inspecting')")
+    assert "current_shape" not in out
+    assert "Warning:" not in out
+    assert "inspecting" in out
+
+
 # --- security ---
 
 def test_show_objects_persist_across_execute_calls(session):
