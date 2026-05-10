@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.17
+
+This release closes the loop on **LLM-driven 2D engineering drawings**. The workflow for 2D mirrors what was already there for 3D — write Python, render to review, export to ship — and the underlying drafting library is build123d's own (no MCP-specific dialect).
+
+### Features
+
+- **`build123d://drafting` cookbook** (#89): a new task-indexed MCP resource with 11 runnable examples covering the full code-first 2D drafting pipeline — Draft config, basic + tolerance dimensions, diameter dim, 3D-to-2D projection, multi-view sheet layout, hole-table pattern, title block via `TechnicalDrawing`, and the build → review → ship loop. Plus a "clean SVG export" recipe that explicitly teaches the `fill_color = line_color` trick on the dimensions layer so the LLM can produce the same clean output in scripts that run outside the MCP.
+- **`render_view` auto-detects 2D inputs** (#89): when a named object has no solid content and lies flat in Z (a Sketch or Compound built via `build123d.drafting`), `render_view` routes through an `ExportSVG` → `resvg-py` raster pipeline instead of VTK tessellation. Output is a clean engineering drawing — black part lines, blue dimensions, real filled text, no doubled-line artefacts. `label_objects=True` works for 2D too, adding a label below each named object's bbox so the LLM can identify what it's looking at.
+- **`export` auto-detects 2D inputs** (#89): Sketches and dimensioned drawings can now be exported to DXF or SVG via the same `export()` tool. Mixing 2D and 3D formats for the same shape errors with a clear pointer at the right tool (`use render_view(format="dxf") for the projected outline of a 3D solid`).
+
+### Workflow guidance
+
+- **`workflow_hints` item 11.5** (#89): explicit nudge toward `build123d.drafting` for 2D drawing work and the build → render_view → export loop.
+- **`start-cad-session` step 10** (#89): same nudge in the session prompt.
+
+### Dependency
+
+- **`resvg-py`** added as a dependency for the SVG → PNG rasterisation step. Pure Rust wheels ship pre-built for Linux / macOS / Windows — no native cairo dependency, no system package needed.
+
+---
+
 ## v0.3.16
 
 ### Release process
