@@ -116,7 +116,7 @@ Render one or more shapes and return a file path to the rendered image.
 - `clip_plane` (string, default `""`) — `x`, `y`, or `z`; clips each mesh at its bounding-box midpoint to expose internal geometry (bores, wall thickness)
 - `clip_at` (float, optional) — absolute world coordinate for the clip plane instead of the midpoint
 - `azimuth` / `elevation` (float, default `0.0`) — camera rotation in degrees applied after the direction preset
-- `format` (string, default `"png"`) — `png`, `svg`, or `both`
+- `format` (string, default `"png"`) — `png`, `svg`, `dxf`, or `both` (= png + svg). DXF returns the projected polylines as parseable 2D CAD geometry — use when a downstream tool (matplotlib, ezdxf, FreeCAD) needs the actual geometry rather than a raster image.
 - `save_to` (string, default `""`) — optional path to also write the file(s) to disk
 - `label_objects` (bool, default `False`) — label each named object from `show()` at its centroid in the PNG. Useful for assemblies where the LLM needs to confirm which shape is which by name.
 - `highlights` (list of dict, default `None`) — label specific faces, edges, or vertices in the PNG. Each entry is `{"object": "name", "type": "face"|"edge"|"vertex", "index": int, "label": "text"}` where `index` matches the position in `shape.faces()` / `.edges()` / `.vertices()`. The referenced object must already be registered with `show()` and included in the rendered set; an unregistered object raises an error naming what to register. Use this to verify "edge 5 is the one I want to fillet" before committing to the operation. Labels are PNG-only — SVG output emits a `label_warnings` notice.

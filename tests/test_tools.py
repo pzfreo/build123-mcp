@@ -473,6 +473,49 @@ def test_render_view_save_to_both_writes_two_files(session, tmp_path, monkeypatc
     assert (tmp_path / "multi.svg").exists()
 
 
+# --- render_view DXF ---
+
+def test_render_view_dxf_returns_dxf_bytes(session):
+    execute_code(session, "result = Box(20, 10, 5)")
+    out = render_view(session, "top", format="dxf")
+    assert "dxf" in out and "png" not in out and "svg" not in out
+    # DXF magic: file starts with "  0\nSECTION\n  2\nHEADER" and contains $ACADVER
+    assert b"SECTION" in out["dxf"]
+    assert b"$ACADVER" in out["dxf"]
+
+
+def test_render_view_dxf_contains_named_layers(session):
+    """Each named shape should produce visible + hidden layers in the DXF."""
+    execute_code(session, "show(Box(20, 10, 5), 'plate')")
+    out = render_view(session, "top", format="dxf")
+    text = out["dxf"].decode("utf-8", errors="ignore")
+    assert "plate_visible" in text
+    assert "plate_hidden" in text
+
+
+def test_render_view_dxf_save_to_writes_dxf_file(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "result = Box(20, 10, 5)")
+    render_view(session, "top", save_to="part", format="dxf")
+    assert (tmp_path / "part.dxf").exists()
+    assert (tmp_path / "part.dxf").stat().st_size > 0
+
+
+def test_render_view_dxf_save_to_strips_dxf_extension(session, tmp_path, monkeypatch):
+    """Passing save_to='part.dxf' should write part.dxf (not part.dxf.dxf)."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "result = Box(20, 10, 5)")
+    render_view(session, "top", save_to="part.dxf", format="dxf")
+    assert (tmp_path / "part.dxf").exists()
+    assert not (tmp_path / "part.dxf.dxf").exists()
+
+
+def test_render_view_dxf_invalid_format_message_lists_dxf(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="dxf"):
+        render_view(session, "iso", format="jpeg")
+
+
 # --- render_view labels ---
 
 def test_render_view_label_objects_renders(session):
