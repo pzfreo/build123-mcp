@@ -30,13 +30,24 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
     )
 
     contents: list = []
+    # Helper: prefer the user-requested save_to path (in result["<fmt>_path"])
+    # over a fresh tempfile. When save_to is set, render_view has already
+    # written the file at the requested path; we just need a path to deliver
+    # via the [SEND:] marker. When save_to is empty, fall back to a tempfile.
+    def _path_for(key: str, suffix: str) -> str:
+        saved = result.get(f"{key}_path")
+        if saved:
+            return saved
+        fd, p = tempfile.mkstemp(suffix=suffix, prefix="build123d_")
+        os.close(fd)
+        with open(p, "wb") as f:
+            f.write(result[key])
+        return p
+
     for key, suffix, mime in (("png", ".png", "image/png"), ("svg", ".svg", "image/svg+xml")):
         if key in result:
             data = result[key]
-            fd, path = tempfile.mkstemp(suffix=suffix, prefix="build123d_")
-            os.close(fd)
-            with open(path, "wb") as f:
-                f.write(data)
+            path = _path_for(key, suffix)
             contents.append(ImageContent(
                 type="image",
                 data=base64.b64encode(data).decode(),
@@ -47,10 +58,7 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
     # DXF is a CAD interchange format, not an image — emit only the file marker
     # so clients deliver the file without the ImageContent base64 round-trip.
     if "dxf" in result:
-        fd, path = tempfile.mkstemp(suffix=".dxf", prefix="build123d_")
-        os.close(fd)
-        with open(path, "wb") as f:
-            f.write(result["dxf"])
+        path = _path_for("dxf", ".dxf")
         contents.append(TextContent(
             type="text",
             text=f"DXF saved: {path}\n[SEND: {path}]",

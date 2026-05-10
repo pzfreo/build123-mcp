@@ -749,8 +749,13 @@ def render_view(
                 save_to = base
             for key, suffix in (("png", ".png"), ("svg", ".svg"), ("dxf", ".dxf")):
                 if key in result:
-                    with open(safe_output_path(save_to + suffix), "wb") as f:
+                    abs_path = safe_output_path(save_to + suffix)
+                    with open(abs_path, "wb") as f:
                         f.write(result[key])
+                    # Record the on-disk path so the MCP wrapper can use it
+                    # for [SEND:] markers instead of writing a duplicate
+                    # tempfile copy.
+                    result[f"{key}_path"] = abs_path
         return result
 
     # Resolve labels up-front so validation errors surface before any rendering work.
@@ -807,14 +812,11 @@ def render_view(
         base, ext = os.path.splitext(save_to)
         if ext.lower() in (".png", ".svg", ".dxf"):
             save_to = base
-        if "png" in result:
-            with open(safe_output_path(save_to + ".png"), "wb") as f:
-                f.write(result["png"])
-        if "svg" in result:
-            with open(safe_output_path(save_to + ".svg"), "wb") as f:
-                f.write(result["svg"])
-        if "dxf" in result:
-            with open(safe_output_path(save_to + ".dxf"), "wb") as f:
-                f.write(result["dxf"])
+        for key, suffix in (("png", ".png"), ("svg", ".svg"), ("dxf", ".dxf")):
+            if key in result:
+                abs_path = safe_output_path(save_to + suffix)
+                with open(abs_path, "wb") as f:
+                    f.write(result[key])
+                result[f"{key}_path"] = abs_path
 
     return result
