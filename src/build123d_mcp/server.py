@@ -76,7 +76,7 @@ def measure(object_name: str = "") -> str:
 
 @mcp.tool()
 def clearance(object_a: str, object_b: str) -> str:
-    """Return the minimum distance (mm) between two named shapes registered via show(). A result of 0 means the shapes are touching or overlapping — use interference() to check for overlap. object_a, object_b: names from show()."""
+    """Spatial relationship between two named shapes. Returns JSON with `clearance` (mm), `status` (one of: apart, touching, containing, interpenetrating), `containment` (a_in_b, b_in_a, or neither), and `intersection_volume` / `a_volume_outside_b` / `b_volume_outside_a` for overlap quantification. Reads `clearance` differently per status: apart=gap, containing=wall thickness from inner surface to outer hull (use this to verify a pocket fits inside a plate), touching=0, interpenetrating=0 (check intersection_volume + a_volume_outside_b for the wall-piercing case). Single call replaces the older clearance + interference combination. object_a, object_b: names from show()."""
     return _session.clearance(object_a, object_b)
 
 

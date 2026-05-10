@@ -145,13 +145,27 @@ Prefer `measure()` over `render_view()` for verifying geometry — numbers are u
 ---
 
 ### `clearance`
-Return the minimum distance (mm) between two named shapes.
+Spatial relationship between two named shapes — distance, containment, and overlap in one call.
 
 **Inputs:** `object_a`, `object_b` (string) — names from `show()`
 
-**Returns:** JSON, e.g. `{"clearance": 1.5}`
+**Returns:** JSON with:
+- `clearance` (mm) — interpretation depends on `status` (see below)
+- `status` — `apart` | `touching` | `containing` | `interpenetrating`
+- `containment` — `a_in_b` | `b_in_a` | `neither`
+- `intersection_volume` (mm³) — overlap between the two shapes
+- `a_volume_outside_b`, `b_volume_outside_a` (mm³) — how much of each shape escapes the other
 
-A result of `0` means the shapes are touching or overlapping — use `interference()` to check for actual overlap volume.
+Status semantics:
+- **apart**: surfaces don't touch; `clearance` = gap distance
+- **touching**: surfaces meet exactly; `clearance` = 0, `intersection_volume` = 0
+- **containing**: one shape fully inside the other; `clearance` = wall thickness in the worst direction (smallest gap from the inner shape's surface to the outer hull). Use this to verify a pocket/hole/bore fits inside a plate with adequate wall.
+- **interpenetrating**: shapes overlap and neither is fully inside the other — the wall-piercing case. `intersection_volume` shows how much they overlap; `a_volume_outside_b` shows how much of A pokes outside B.
+
+Examples:
+- Verifying a hole has 1 mm wall thickness: `clearance(hole, plate)` → `status=containing, clearance≥1.0`
+- Catching a hole that pierces the back of a plate: `clearance(hole, plate)` → `status=interpenetrating, a_volume_outside_b>0`
+- Checking two assembly parts don't collide: `clearance(part_a, part_b)` → `status=apart` and `clearance > required_gap`
 
 ---
 
