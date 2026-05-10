@@ -3,7 +3,7 @@ import struct
 
 from build123d_mcp.tools._paths import safe_output_path
 
-_VALID_FORMATS = ("step", "stl")
+_VALID_FORMATS = ("step", "stl", "dxf", "svg")
 
 
 def _labelled_copy(shape, label: str):
@@ -54,12 +54,48 @@ def _stl_write(shape, abs_path: str) -> None:
             f.write(b"\x00\x00")  # attribute byte count
 
 
+def _is_2d(shape) -> bool:
+    """True if the shape has no solid content (Sketch, Compound of edges, etc.).
+    Used to decide whether to write 2D formats (DXF/SVG) or fall through to
+    3D formats (STEP/STL)."""
+    try:
+        return len(shape.solids()) == 0
+    except Exception:
+        return False
+
+
+def _write_dxf(shape, abs_path: str) -> None:
+    """Write a 2D shape (Sketch, Compound of edges/sketches) to DXF."""
+    from build123d import ExportDXF
+    label = getattr(shape, "label", "") or "drawing"
+    exporter = ExportDXF()
+    exporter.add_layer(label)
+    exporter.add_shape(shape, layer=label)
+    exporter.write(abs_path)
+
+
+def _write_svg(shape, abs_path: str) -> None:
+    """Write a 2D shape (Sketch, Compound of edges/sketches) to SVG."""
+    from build123d import ExportSVG
+    label = getattr(shape, "label", "") or "drawing"
+    exporter = ExportSVG(margin=5)
+    exporter.add_layer(label, line_weight=0.4)
+    exporter.add_shape(shape, layer=label)
+    exporter.write(abs_path)
+
+
 def _write_one(shape, abs_path: str, fmt: str) -> None:
     if fmt == "step":
         from build123d import export_step
         export_step(shape, abs_path)
-    else:
+    elif fmt == "stl":
         _stl_write(shape, abs_path)
+    elif fmt == "dxf":
+        _write_dxf(shape, abs_path)
+    elif fmt == "svg":
+        _write_svg(shape, abs_path)
+    else:
+        raise ValueError(f"Unknown format '{fmt}'")
 
 
 def export_file(session, filename: str, format: str = "step", object_name: str = "") -> str:
@@ -70,15 +106,31 @@ def export_file(session, filename: str, format: str = "step", object_name: str =
         raise ValueError("No format specified.")
     unknown = [f for f in formats if f not in _VALID_FORMATS]
     if unknown:
-        raise ValueError(f"Unknown format(s) '{', '.join(unknown)}'. Use: step, stl")
+        raise ValueError(f"Unknown format(s) '{', '.join(unknown)}'. Use: step, stl, dxf, svg")
+
+    # Sanity: 2D shapes can only export 2D formats; 3D shapes can only export 3D.
+    is_2d = _is_2d(shape)
+    if is_2d:
+        bad_2d = [f for f in formats if f in ("step", "stl")]
+        if bad_2d:
+            raise ValueError(
+                f"Cannot export 2D shape as {bad_2d}. Use 'dxf' or 'svg' for 2D drawings."
+            )
+    else:
+        bad_3d = [f for f in formats if f in ("dxf", "svg")]
+        if bad_3d:
+            raise ValueError(
+                f"Cannot export 3D shape as {bad_3d}. Use 'step' or 'stl' for 3D solids; "
+                f"use render_view(format=\"dxf\") for the projected 2D outline."
+            )
 
     exported = []
     for fmt in formats:
         path = filename
-        if fmt == "step" and not path.lower().endswith((".step", ".stp")):
-            path += ".step"
-        elif fmt == "stl" and not path.lower().endswith(".stl"):
-            path += ".stl"
+        ext_for_fmt = {"step": ".step", "stl": ".stl", "dxf": ".dxf", "svg": ".svg"}[fmt]
+        existing_exts = (".step", ".stp") if fmt == "step" else (ext_for_fmt,)
+        if not path.lower().endswith(existing_exts):
+            path += ext_for_fmt
         abs_path = safe_output_path(path)
         _write_one(shape, abs_path, fmt)
         exported.append(abs_path)

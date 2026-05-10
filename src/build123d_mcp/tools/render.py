@@ -526,6 +526,82 @@ def _do_render_dxf(shapes, direction, clip_plane, clip_at, azimuth, elevation) -
             return f.read()
 
 
+def _shapes_are_2d(shapes) -> bool:
+    """True if every input shape is purely 2D (no solids).
+
+    Sketches, edges, wires, and Compounds containing only those count as 2D.
+    The 2D path applies to dimensioned drawings composed via build123d.drafting
+    primitives (ExtensionLine, DimensionLine, TechnicalDrawing).
+    """
+    for _name, shape, _color in shapes:
+        try:
+            if len(shape.solids()) > 0:
+                return False
+        except Exception:
+            return False
+    return True
+
+
+def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
+    """Rasterise a 2D dimensioned drawing to PNG.
+
+    Pipes the shapes through ExportDXF (in-memory) then ezdxf's matplotlib
+    drawing backend. Each shape gets its own DXF layer named after its
+    session name so the LLM (and downstream CAD tools) can tell them apart.
+
+    label_objects: when True, adds a TEXT entity at each named shape's
+    centroid so the LLM can identify what it's looking at — same role as
+    the VTK billboard labels in the 3D path.
+    """
+    import os as _os
+    import tempfile as _tempfile
+    import matplotlib
+    matplotlib.use("Agg")
+    from build123d import ExportDXF
+    import ezdxf
+    from ezdxf.addons.drawing import matplotlib as ezmpl
+
+    exporter = ExportDXF()
+    for i, (name, shape, _color) in enumerate(shapes):
+        layer = name if name and name != "shape" else f"shape_{i}"
+        exporter.add_layer(layer)
+        try:
+            exporter.add_shape(shape, layer=layer)
+        except Exception:
+            continue
+
+    with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+        dxf_path = _os.path.join(tmpdir, "drawing.dxf")
+        png_path = _os.path.join(tmpdir, "drawing.png")
+        exporter.write(dxf_path)
+
+        # Reopen the DXF so we can add labels and re-render. Adding labels via
+        # raw ezdxf TEXT entities is simpler than threading them through the
+        # build123d ExportDXF wrapper.
+        doc = ezdxf.readfile(dxf_path)
+        if label_objects:
+            msp = doc.modelspace()
+            doc.layers.add(name="_labels", color=1)
+            for _i, (name, shape, _color) in enumerate(shapes):
+                if not name or name == "shape":
+                    continue
+                try:
+                    bb = shape.bounding_box()
+                    cx = (bb.min.X + bb.max.X) / 2
+                    cy = (bb.min.Y + bb.max.Y) / 2
+                except Exception:
+                    continue
+                # MTEXT renders consistently in the matplotlib backend
+                msp.add_mtext(
+                    str(name),
+                    dxfattribs={"layer": "_labels", "char_height": 4.0},
+                ).set_location((cx, cy))
+
+        ezmpl.qsave(doc.modelspace(), png_path, dpi=150, size_inches=(8, 6))
+        with open(png_path, "rb") as f:
+            return f.read()
+
+
 def render_view(
     session,
     direction: str = "iso",
@@ -568,6 +644,65 @@ def render_view(
 
     shapes = _resolve_shapes(session, objects)
     tess = _QUALITY[quality]
+
+    # 2D path: shapes carry no solids (sketches, edges, dimensioned drawings
+    # built with build123d.drafting). Route to the 2D renderer/exporter
+    # instead of the 3D tessellation pipeline. Single named object that's a
+    # composed engineering drawing is the typical case.
+    if _shapes_are_2d(shapes):
+        result: dict = {}
+        if highlights:
+            result["label_warnings"] = [
+                "highlights are only supported for 3D shapes; ignored for 2D drawings."
+            ]
+        if format in ("png", "both"):
+            try:
+                result["png"] = _do_render_png_2d(shapes, label_objects=label_objects)
+            except Exception as exc:
+                result["png_error"] = f"{type(exc).__name__}: {exc}"
+        if format in ("svg", "both"):
+            # 2D Sketches → SVG via build123d ExportSVG
+            from build123d import ExportSVG
+            import tempfile as _tempfile
+            with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+                exporter = ExportSVG(margin=5)
+                for i, (name, shape, _c) in enumerate(shapes):
+                    layer = name if name and name != "shape" else f"shape_{i}"
+                    exporter.add_layer(layer, line_weight=0.4)
+                    try:
+                        exporter.add_shape(shape, layer=layer)
+                    except Exception:
+                        continue
+                svg_path = os.path.join(tmp, "drawing.svg")
+                exporter.write(svg_path)
+                with open(svg_path, "rb") as f:
+                    result["svg"] = f.read()
+        if format == "dxf":
+            from build123d import ExportDXF
+            import tempfile as _tempfile
+            with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+                exporter = ExportDXF()
+                for i, (name, shape, _c) in enumerate(shapes):
+                    layer = name if name and name != "shape" else f"shape_{i}"
+                    exporter.add_layer(layer)
+                    try:
+                        exporter.add_shape(shape, layer=layer)
+                    except Exception:
+                        continue
+                dxf_path = os.path.join(tmp, "drawing.dxf")
+                exporter.write(dxf_path)
+                with open(dxf_path, "rb") as f:
+                    result["dxf"] = f.read()
+        if save_to:
+            from build123d_mcp.tools._paths import safe_output_path
+            base, ext = os.path.splitext(save_to)
+            if ext.lower() in (".png", ".svg", ".dxf"):
+                save_to = base
+            for key, suffix in (("png", ".png"), ("svg", ".svg"), ("dxf", ".dxf")):
+                if key in result:
+                    with open(safe_output_path(save_to + suffix), "wb") as f:
+                        f.write(result[key])
+        return result
 
     # Resolve labels up-front so validation errors surface before any rendering work.
     labels: list[tuple[tuple[float, float, float], str]] = []

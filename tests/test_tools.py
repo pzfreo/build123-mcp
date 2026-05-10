@@ -516,6 +516,90 @@ def test_render_view_dxf_invalid_format_message_lists_dxf(session):
         render_view(session, "iso", format="jpeg")
 
 
+# --- render_view 2D drafting (Sketch/Compound) ---
+
+def _build_2d_drawing(session):
+    """Set up a session with a dimensioned 2D drawing as a named object."""
+    execute_code(session, """
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+visible, _ = plate.project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+draft = Draft(font_size=2.5, decimal_precision=1)
+length = ExtensionLine(border=[(-20, -10, 0), (20, -10, 0)], offset=8, draft=draft, label='40')
+drawing = Compound(children=list(visible) + [length])
+show(drawing, 'top_view')
+""")
+
+
+def test_render_view_2d_returns_png(session):
+    """A composed 2D drawing renders to a real PNG via the ezdxf+matplotlib path."""
+    _build_2d_drawing(session)
+    out = render_view(session, objects="top_view", format="png")
+    assert "png" in out
+    assert out["png"][:8] == PNG_MAGIC
+
+
+def test_render_view_2d_dxf_returns_dxf(session):
+    """A composed 2D drawing exports to DXF via render_view too."""
+    _build_2d_drawing(session)
+    out = render_view(session, objects="top_view", format="dxf")
+    assert "dxf" in out
+    assert b"SECTION" in out["dxf"]
+
+
+def test_render_view_2d_with_label_objects(session):
+    """label_objects=True for a 2D drawing adds an MTEXT label at the centroid."""
+    _build_2d_drawing(session)
+    plain = render_view(session, objects="top_view", format="png", label_objects=False)
+    labelled = render_view(session, objects="top_view", format="png", label_objects=True)
+    # Labelled render is larger because of the added text glyphs
+    assert len(labelled["png"]) > len(plain["png"])
+
+
+def test_render_view_2d_save_to_writes_png(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _build_2d_drawing(session)
+    render_view(session, objects="top_view", format="png", save_to="out")
+    assert (tmp_path / "out.png").exists()
+
+
+# --- export 2D drafting ---
+
+def test_export_2d_to_dxf(session, tmp_path, monkeypatch):
+    """A 2D drawing exports cleanly to DXF via the export tool."""
+    monkeypatch.chdir(tmp_path)
+    _build_2d_drawing(session)
+    export_file(session, "drawing", "dxf", object_name="top_view")
+    assert (tmp_path / "drawing.dxf").exists()
+    assert (tmp_path / "drawing.dxf").stat().st_size > 0
+    text = (tmp_path / "drawing.dxf").read_text(errors="ignore")
+    assert "SECTION" in text
+
+
+def test_export_2d_to_svg(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _build_2d_drawing(session)
+    export_file(session, "drawing", "svg", object_name="top_view")
+    assert (tmp_path / "drawing.svg").exists()
+    text = (tmp_path / "drawing.svg").read_text(errors="ignore")
+    assert "<svg" in text
+
+
+def test_export_2d_rejects_step(session, tmp_path, monkeypatch):
+    """Trying to export a 2D drawing as STEP gives a clear error pointing at dxf/svg."""
+    monkeypatch.chdir(tmp_path)
+    _build_2d_drawing(session)
+    with pytest.raises(ValueError, match="dxf.*svg|2D"):
+        export_file(session, "drawing", "step", object_name="top_view")
+
+
+def test_export_3d_rejects_dxf(session, tmp_path, monkeypatch):
+    """Trying to export a 3D solid as DXF points at render_view(format='dxf') for the projection."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "show(Box(10, 10, 10), 'cube')")
+    with pytest.raises(ValueError, match="render_view"):
+        export_file(session, "out", "dxf", object_name="cube")
+
+
 # --- render_view labels ---
 
 def test_render_view_label_objects_renders(session):

@@ -26,10 +26,10 @@ When using an AI to write build123d scripts, the AI writes blind — it cannot s
 - `last_error` — details of the last failed `execute()`: type, message, line number, and code excerpt
 
 **Viewing**
-- `render_view` — render one or more shapes as PNG or SVG; supports assembly compositing, high-quality tessellation, cross-section clip planes, and optional labels for named shapes or specific faces/edges
+- `render_view` — render one or more shapes as PNG / SVG / DXF; auto-detects 3D vs 2D inputs (composed dimensioned drawings via `build123d.drafting` rasterise via ezdxf+matplotlib); supports assembly compositing, high-quality tessellation, cross-section clip planes, and optional labels for named shapes or specific faces/edges
 
 **Import / export**
-- `export` — export as STEP, STL, or both in one call; targets a named object, the current shape, or `*` for all objects as an assembly
+- `export` — export as STEP / STL / DXF / SVG (or comma-separated like `step,stl`); auto-detects 2D vs 3D shape and routes to the appropriate format; targets a named object, the current shape, or `*` for all objects as an assembly
 - `import_cad_file` — load a STEP or STL file as a named object for comparison
 
 **Comparison**
@@ -55,6 +55,7 @@ Read-only MCP resources available to LLM clients:
 
 - `build123d://quickref` — build123d API quick reference (primitives, booleans, positioning, selectors, fillets)
 - `build123d://selectors` — task-indexed selector cookbook (get the top face, find circular edges, filter by area/length/radius, `Select.LAST` in builder context, fillet detection)
+- `build123d://drafting` — code-first 2D engineering drawings cookbook (project a 3D part, dimension with ExtensionLine/DimensionLine, tolerances, hole-table pattern, multi-view sheet, title block, export to DXF)
 - `build123d://session` — live session state as JSON (current shape, named objects, snapshots, variables)
 - `build123d://bd_warehouse` — catalogue of pre-built parametric parts from bd_warehouse (bearings, fasteners, gears, pipes, threads, and more)
 
