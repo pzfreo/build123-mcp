@@ -87,9 +87,16 @@ jobs:
           EOF
       - name: Install mcp-publisher
         run: |
-          curl -sL -o mcp-publisher \
-            https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64
+          # Resolve the latest release tag via the API rather than the
+          # /releases/latest/download/ shortcut, which has been observed to
+          # 502 intermittently. -f makes curl fail on non-2xx responses.
+          tag=$(curl -sLf https://api.github.com/repos/modelcontextprotocol/registry/releases/latest \
+                  | python3 -c "import json, sys; print(json.load(sys.stdin)['tag_name'])")
+          curl -sLf -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/$tag/mcp-publisher_linux_amd64.tar.gz"
+          tar xzf mcp-publisher.tar.gz mcp-publisher
           chmod +x mcp-publisher
+          ./mcp-publisher --help > /dev/null   # fail loudly if the binary's broken
       - name: Login via GitHub OIDC
         run: ./mcp-publisher login github-oidc
       - name: Publish to MCP registry
