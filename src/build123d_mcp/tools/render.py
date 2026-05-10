@@ -65,7 +65,7 @@ _QUALITY = {
     "high":     {"linear_deflection": 0.0005, "angular_deflection": 0.02},
 }
 
-_VALID_FORMATS = ("png", "svg", "both")
+_VALID_FORMATS = ("png", "svg", "dxf", "both")
 
 
 def _resolve_shapes(session, objects: str):
@@ -466,6 +466,66 @@ def _do_render_svg(shapes, direction, clip_plane, clip_at, azimuth, elevation) -
             return f.read()
 
 
+def _do_render_dxf(shapes, direction, clip_plane, clip_at, azimuth, elevation) -> bytes:
+    """Produce a DXF via build123d's HLR projection.
+
+    DXF is the standard 2D CAD interchange format. Use it when the LLM (or a
+    downstream tool) needs the projected geometry as parseable polylines
+    rather than as a raster — e.g. building a matplotlib annotation overlay
+    on top of a faithful base layer instead of redrawing the shape by hand.
+
+    Each input shape becomes two layers: <name>_visible (solid) and
+    <name>_hidden (dashed). Clip-plane handling mirrors the SVG path.
+    """
+    import tempfile
+    from build123d import ExportDXF, LineType, Plane, Vector
+
+    clipped_shapes = []
+    if clip_plane:
+        for name, shape, color in shapes:
+            if clip_at is not None:
+                origin = {"x": (clip_at, 0, 0), "y": (0, clip_at, 0), "z": (0, 0, clip_at)}[clip_plane]
+            else:
+                c = shape.center()
+                origin = {"x": (c.X, 0, 0), "y": (0, c.Y, 0), "z": (0, 0, c.Z)}[clip_plane]
+            normal = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}[clip_plane]
+            plane = Plane(origin=Vector(*origin), z_dir=Vector(*normal))
+            try:
+                halves = shape.split(plane, keep=None)
+                kept = halves[0] if isinstance(halves, tuple) else halves
+            except Exception:
+                kept = shape
+            clipped_shapes.append((name, kept, color))
+    else:
+        clipped_shapes = list(shapes)
+
+    origin, up, look_at = _viewport_origin_for(direction, clipped_shapes, azimuth, elevation)
+
+    exporter = ExportDXF()
+    for i, (name, shape, _obj_color) in enumerate(clipped_shapes):
+        try:
+            visible, hidden = shape.project_to_viewport(
+                viewport_origin=origin, viewport_up=up, look_at=look_at,
+            )
+        except Exception:
+            continue
+
+        layer_visible = f"{name or f'shape_{i}'}_visible"
+        layer_hidden = f"{name or f'shape_{i}'}_hidden"
+        exporter.add_layer(layer_visible)
+        exporter.add_layer(layer_hidden, line_type=LineType.HIDDEN)
+        if visible:
+            exporter.add_shape(visible, layer=layer_visible)
+        if hidden:
+            exporter.add_shape(hidden, layer=layer_hidden)
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+        dxf_path = os.path.join(tmpdir, "render.dxf")
+        exporter.write(dxf_path)
+        with open(dxf_path, "rb") as f:
+            return f.read()
+
+
 def render_view(
     session,
     direction: str = "iso",
@@ -504,7 +564,7 @@ def render_view(
 
     format = format.lower()
     if format not in _VALID_FORMATS:
-        raise ValueError(f"Unknown format '{format}'. Use: png, svg, both")
+        raise ValueError(f"Unknown format '{format}'. Use: png, svg, dxf, both")
 
     shapes = _resolve_shapes(session, objects)
     tess = _QUALITY[quality]
@@ -517,9 +577,9 @@ def render_view(
 
     result: dict = {}
 
-    if (label_objects or highlights) and format in ("svg", "both"):
+    if (label_objects or highlights) and format in ("svg", "dxf", "both"):
         result["label_warnings"] = [
-            "Labels are only rendered in PNG output; SVG output is unlabelled."
+            "Labels are only rendered in PNG output; SVG/DXF output is unlabelled."
         ]
 
     if format in ("png", "both"):
@@ -554,11 +614,16 @@ def render_view(
             shapes, direction, clip_plane, clip_at, azimuth, elevation,
         )
 
+    if format == "dxf":
+        result["dxf"] = _do_render_dxf(
+            shapes, direction, clip_plane, clip_at, azimuth, elevation,
+        )
+
     if save_to:
         from build123d_mcp.tools._paths import safe_output_path
         # Strip a known extension so format='both' produces consistent <base>.png and <base>.svg
         base, ext = os.path.splitext(save_to)
-        if ext.lower() in (".png", ".svg"):
+        if ext.lower() in (".png", ".svg", ".dxf"):
             save_to = base
         if "png" in result:
             with open(safe_output_path(save_to + ".png"), "wb") as f:
@@ -566,5 +631,8 @@ def render_view(
         if "svg" in result:
             with open(safe_output_path(save_to + ".svg"), "wb") as f:
                 f.write(result["svg"])
+        if "dxf" in result:
+            with open(safe_output_path(save_to + ".dxf"), "wb") as f:
+                f.write(result["dxf"])
 
     return result
