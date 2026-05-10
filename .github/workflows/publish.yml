@@ -62,6 +62,39 @@ jobs:
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
 
+  publish-mcp-registry:
+    needs: publish-pypi
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # for github-oidc auth to the MCP registry
+      contents: read    # for checkout
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync server.json version with the release tag
+        run: |
+          tag=${{ github.event.release.tag_name }}
+          version=${tag#v}
+          python3 - <<EOF
+          import json
+          with open("server.json") as f:
+              d = json.load(f)
+          d["version"] = "$version"
+          for p in d.get("packages", []):
+              p["version"] = "$version"
+          with open("server.json", "w") as f:
+              json.dump(d, f, indent=2)
+          EOF
+      - name: Install mcp-publisher
+        run: |
+          curl -sL -o mcp-publisher \
+            https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64
+          chmod +x mcp-publisher
+      - name: Login via GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+      - name: Publish to MCP registry
+        run: ./mcp-publisher publish
+
   bump-version:
     needs: publish-pypi
     if: github.event_name == 'release'
