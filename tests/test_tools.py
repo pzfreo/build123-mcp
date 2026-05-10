@@ -627,6 +627,75 @@ show(Compound(children=list(visible_b)), 'plate_b')
     assert "rgb(0,0,255)" in text or "rgb(0, 0, 255)" in text
 
 
+# --- #92 F4: colors= dict for fine-grained per-layer colour ---
+
+def test_render_view_2d_colors_dict_overrides_per_object(session):
+    """colors={'plate_a': 'red'} should win over both the default palette
+    and any name:color syntax."""
+    execute_code(session, """
+visible_a, _ = Box(20, 20, 5).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+visible_b, _ = Box(15, 15, 3).move(Location((25, 0, 0))).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+show(Compound(children=list(visible_a)), 'plate_a')
+show(Compound(children=list(visible_b)), 'plate_b')
+""")
+    out = render_view(
+        session,
+        objects="plate_a,plate_b",  # no inline colours
+        format="svg",
+        colors={"plate_a": "red", "plate_b": "blue"},
+    )
+    text = out["svg"].decode("utf-8", errors="ignore")
+    assert "rgb(255,0,0)" in text or "rgb(255, 0, 0)" in text
+    assert "rgb(0,0,255)" in text or "rgb(0, 0, 255)" in text
+
+
+def test_render_view_2d_colors_overrides_inline_namecolor(session):
+    """colors dict beats inline name:color when both specify the same object."""
+    execute_code(session, """
+visible_a, _ = Box(20, 20, 5).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+show(Compound(children=list(visible_a)), 'plate_a')
+""")
+    # Inline says red; colors dict says green — green should win
+    out = render_view(
+        session,
+        objects="plate_a:red",
+        format="svg",
+        colors={"plate_a": "green"},
+    )
+    text = out["svg"].decode("utf-8", errors="ignore")
+    # matplotlib 'green' = rgb(0, 128, 0) in standard colour names
+    assert "rgb(0,128,0)" in text or "rgb(0, 128, 0)" in text
+    # And red should NOT appear
+    assert "rgb(255,0,0)" not in text and "rgb(255, 0, 0)" not in text
+
+
+def test_render_view_2d_colors_dims_layer(session):
+    """colors['_dims'] should change the dimensions/annotations colour."""
+    _build_2d_drawing(session)
+    out = render_view(session, objects="top_view", format="svg", colors={"_dims": "darkgreen"})
+    text = out["svg"].decode("utf-8", errors="ignore")
+    # matplotlib 'darkgreen' = rgb(0, 100, 0)
+    assert "rgb(0,100,0)" in text or "rgb(0, 100, 0)" in text
+
+
+def test_render_view_2d_colors_unknown_name_falls_back_to_palette(session):
+    """A colors dict that doesn't mention the object should fall back to
+    the inline colour or palette — not crash."""
+    execute_code(session, """
+visible_a, _ = Box(20, 20, 5).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+show(Compound(children=list(visible_a)), 'plate_a')
+""")
+    out = render_view(
+        session,
+        objects="plate_a:red",
+        format="svg",
+        colors={"_dims": "purple"},  # nothing for 'plate_a'
+    )
+    text = out["svg"].decode("utf-8", errors="ignore")
+    # Inline 'red' should still apply for plate_a
+    assert "rgb(255,0,0)" in text or "rgb(255, 0, 0)" in text
+
+
 # --- export 2D drafting ---
 
 def test_export_2d_to_dxf(session, tmp_path, monkeypatch):
