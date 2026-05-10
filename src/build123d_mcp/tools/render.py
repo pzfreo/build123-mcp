@@ -542,6 +542,32 @@ def _shapes_are_2d(shapes) -> bool:
     return True
 
 
+def _cairo_available() -> bool:
+    """True if cairosvg can find its native cairo library.
+
+    Cached after the first probe — repeated render_view calls don't re-load
+    the library. Lets the 2D path fall back cleanly to SVG-only output on
+    systems without libcairo (typically macOS / Windows users who haven't
+    installed it manually).
+    """
+    global _CAIRO_AVAILABLE
+    if _CAIRO_AVAILABLE is not None:
+        return _CAIRO_AVAILABLE
+    try:
+        import cairosvg  # noqa: F401
+        # Force-trigger the dlopen by rendering a trivial SVG
+        cairosvg.svg2png(
+            bytestring=b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+        )
+        _CAIRO_AVAILABLE = True
+    except Exception:
+        _CAIRO_AVAILABLE = False
+    return _CAIRO_AVAILABLE
+
+
+_CAIRO_AVAILABLE: bool | None = None
+
+
 def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
     """Rasterise a 2D dimensioned drawing to PNG via build123d ExportSVG +
     cairosvg.
@@ -695,7 +721,26 @@ def render_view(
     # built with build123d.drafting). Route to the 2D renderer/exporter
     # instead of the 3D tessellation pipeline. Single named object that's a
     # composed engineering drawing is the typical case.
+    #
+    # PNG rendering requires the cairo native library (via cairosvg). Fall
+    # back to SVG when cairo isn't available so the LLM still gets *something*
+    # to look at. Linux runners ship libcairo2; macOS / Windows users need
+    # to install it themselves (brew install cairo / GTK runtime).
     if _shapes_are_2d(shapes):
+        if format in ("png", "both") and not _cairo_available():
+            # Promote requested PNG → SVG, with a warning so the caller knows
+            # what to install if they want raster.
+            format = "svg"
+            cairo_warning = (
+                "2D PNG rendering requires the cairo native library. "
+                "Returning SVG instead. Install cairo to enable PNG: "
+                "'brew install cairo' (macOS), 'apt-get install libcairo2' "
+                "(Debian/Ubuntu), or the GTK runtime on Windows."
+            )
+        else:
+            cairo_warning = None
+        if cairo_warning:
+            result.setdefault("label_warnings", []).append(cairo_warning)
         if highlights:
             result["label_warnings"] = [
                 "highlights are only supported for 3D shapes; ignored for 2D drawings."
