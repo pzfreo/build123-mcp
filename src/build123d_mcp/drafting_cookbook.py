@@ -1,0 +1,350 @@
+"""Single source of truth for the build123d drafting cookbook.
+
+Task-indexed: each example answers a real "how do I draw X?" question
+using build123d.drafting + project_to_viewport + ExportDXF/SVG.
+
+This is the code-first 2D engineering drawing path: the LLM writes the
+script, the script generates the DXF/SVG, the script is the source of
+truth. No auto-dimensioning — the LLM picks dimensions explicitly so
+each call carries engineering intent.
+
+Sections with a label are runnable code blocks executed by
+tests/test_drafting_cookbook.py — they must end with `result = ...`
+or `show(...)` so current_shape is set.
+"""
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Section:
+    text: str
+    label: Optional[str] = None
+
+
+SECTIONS: list[Section] = [
+    Section(
+        "BUILD123D 2D ENGINEERING DRAWINGS COOKBOOK\n"
+        "===========================================\n"
+        "Code-first drafting: the LLM writes Python, the Python emits the DXF.\n"
+        "All annotation primitives live in build123d.drafting.\n"
+        "\n"
+        "Workflow at a glance:\n"
+        "  1. Build the 3D part as usual.\n"
+        "  2. Project it to a 2D view via shape.project_to_viewport(...).\n"
+        "  3. Compose the projection with ExtensionLine / DimensionLine / Arrow\n"
+        "     annotations and a TechnicalDrawing title block.\n"
+        "  4. Export to DXF or SVG via ExportDXF / ExportSVG with layers."
+    ),
+
+    Section(
+        text="""\
+## The Draft config — set once, reuse everywhere
+# Draft holds drawing-wide settings: font, font_size, units, decimal precision,
+# arrow size, line widths. Pass it into every dimension to keep them consistent.
+# Defaults: font_size=5, font='Arial', unit=Unit.MM, decimal_precision=2.
+
+# Common engineering settings: smaller font, single-decimal mm, narrow arrows
+# draft = Draft(font_size=2.5, decimal_precision=1, arrow_length=2.0)"""
+    ),
+
+    Section(
+        label="basic_dimension",
+        text="""\
+## A single linear dimension with extension lines
+# ExtensionLine draws witness lines from the part's edge AND the dimension line
+# offset away from it. `border` is two points (or an Edge); `offset` is the
+# perpendicular distance from the part to the dim line.
+from build123d import *
+
+draft = Draft(font_size=2.5, decimal_precision=1)
+# Annotate a horizontal 40mm distance, dimension placed 8mm below
+result = ExtensionLine(
+    border=[(-20, -10, 0), (20, -10, 0)],
+    offset=8,
+    draft=draft,
+    label="40",
+)
+show(result, "dim")""",
+    ),
+
+    Section(
+        label="dimension_with_tolerance",
+        text="""\
+## Dimension with tolerance
+# tolerance can be a single float (symmetric ±) or a tuple (lower, upper)
+from build123d import *
+
+draft = Draft(font_size=2.5, decimal_precision=1)
+result = ExtensionLine(
+    border=[(0, 0, 0), (30, 0, 0)],
+    offset=8,
+    draft=draft,
+    label="30",
+    tolerance=0.1,        # symmetric: 30 ±0.1
+)
+show(result, "tol_dim")""",
+    ),
+
+    Section(
+        label="diameter_dimension",
+        text="""\
+## Diameter dimension across a circle
+# DimensionLine draws just the dimension line + arrows (no extension lines) —
+# useful for diameters where you want the line crossing through the hole.
+from build123d import *
+
+draft = Draft(font_size=2.5, decimal_precision=1)
+result = DimensionLine(
+    path=[(-3, 0, 0), (3, 0, 0)],
+    draft=draft,
+    label="ø6",
+)
+show(result, "dia_dim")""",
+    ),
+
+    Section(
+        label="project_to_view",
+        text="""\
+## Project a 3D part to a 2D view
+# project_to_viewport returns (visible_edges, hidden_edges) as ShapeLists in
+# world coordinates of the projection plane. View direction is set by the
+# camera position relative to look_at.
+from build123d import *
+
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+
+# Top view: camera above looking down, +Y is up on the page
+visible, hidden = plate.project_to_viewport(
+    viewport_origin=(0, 0, 100),
+    viewport_up=(0, 1, 0),
+    look_at=(0, 0, 0),
+)
+print(f"visible edges: {len(visible.edges())}, hidden: {len(hidden.edges())}")
+result = Compound(children=list(visible))
+show(result, "top_view")""",
+    ),
+
+    Section(
+        label="dimensioned_view",
+        text="""\
+## Compose: project + add dimensions for a complete top view
+# This is the canonical "engineering drawing" pipeline. Each ExtensionLine
+# carries explicit engineering intent — the LLM picks which dimensions matter.
+from build123d import *
+
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+visible, _hidden = plate.project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+
+draft = Draft(font_size=2.5, decimal_precision=1)
+length_dim = ExtensionLine(border=[(-20, -10, 0), (20, -10, 0)], offset=8, draft=draft, label="40")
+width_dim  = ExtensionLine(border=[(20, -10, 0), (20, 10, 0)], offset=8, draft=draft, label="20")
+hole_dim   = DimensionLine(path=[(13, 0, 0), (7, 0, 0)], draft=draft, label="ø6")
+
+# Combine into one Compound for the test harness
+result = Compound(children=list(visible) + [length_dim, width_dim, hole_dim])
+show(result, "dimensioned_top")""",
+    ),
+
+    Section(
+        label="title_block",
+        text="""\
+## Title block via TechnicalDrawing
+# TechnicalDrawing produces a Sketch containing the page frame + title block.
+# Place your dimensioned views inside its drawable area.
+from build123d import *
+
+result = TechnicalDrawing(
+    designed_by="LLM",
+    page_size=PageSize.A4,
+    title="Bracket",
+    sub_title="Top View",
+    drawing_number="DWG-001",
+    drawing_scale=1.0,
+)
+show(result, "title_sheet")""",
+    ),
+
+    Section(
+        label="build_then_review_then_ship",
+        text="""\
+## The full loop: build → review → ship
+# Once you've composed a dimensioned drawing as a named object, the MCP
+# tools handle the rest. The server auto-detects that the drawing is 2D
+# (a Sketch / Compound with no solids) and routes render_view + export
+# through the appropriate path.
+#
+# Workflow from the LLM's perspective:
+#   1. execute()    — build the dimensioned drawing, show(it, "name")
+#   2. render_view(objects="name", format="png", label_objects=True)
+#                   — review what you produced; labels confirm which is which
+#   3. export(name, "dxf")
+#                   — write the DXF for the user (or "svg" for docs)
+#
+# The example below just does step 1; steps 2 and 3 are MCP tool calls
+# the LLM makes after this execute() returns.
+from build123d import *
+
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+visible, _hidden = plate.project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+draft = Draft(font_size=2.5, decimal_precision=1)
+length_dim = ExtensionLine(border=[(-20, -10, 0), (20, -10, 0)], offset=8, draft=draft, label="40")
+width_dim  = ExtensionLine(border=[(20, -10, 0), (20, 10, 0)], offset=8, draft=draft, label="20")
+hole_dim   = DimensionLine(path=[(13, 0, 0), (7, 0, 0)], draft=draft, label="ø6")
+
+result = Compound(children=list(visible) + [length_dim, width_dim, hole_dim])
+show(result, "bracket_top_view")""",
+    ),
+
+    Section(
+        label="multi_view_layout",
+        text="""\
+## Multi-view sheet: top, front, side, all on one drawing
+# Project the same part three times with different camera setups, translate
+# each view to its position on the sheet, compose into one Compound.
+from build123d import *
+
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+
+def project_view(shape, origin, up, look_at):
+    visible, _hidden = shape.project_to_viewport(origin, up, look_at)
+    return Compound(children=list(visible))
+
+top   = project_view(plate, (0, 0, 100), (0, 1, 0),  (0, 0, 0))
+front = project_view(plate, (0, -100, 0), (0, 0, 1), (0, 0, 0))
+side  = project_view(plate, (100, 0, 0),  (0, 0, 1), (0, 0, 0))
+
+# Translate each into a separate area on the page
+top_view   = top.translate((-30, 30, 0))
+front_view = front.translate((-30, 0, 0))
+side_view  = side.translate((30, 0, 0))
+
+result = Compound(children=[top_view, front_view, side_view])
+show(result, "three_view")""",
+    ),
+
+    Section(
+        label="hole_table_pattern",
+        text="""\
+## Hole-table pattern using measure().face_inventory
+# build123d doesn't ship a HoleTable class, but cylindrical face inventory
+# from measure() gives you everything needed: position, diameter, depth.
+# Below: enumerate cylindrical faces, then label each with a leader.
+from build123d import *
+
+plate = (Box(40, 40, 5)
+         - Cylinder(2, 5).move(Location((-10, -10, 0)))
+         - Cylinder(2, 5).move(Location((10, -10, 0)))
+         - Cylinder(2, 5).move(Location((-10, 10, 0)))
+         - Cylinder(2, 5).move(Location((10, 10, 0))))
+
+# Find all cylindrical (hole-wall) faces
+hole_faces = plate.faces().filter_by(GeomType.CYLINDER)
+print(f"found {len(hole_faces)} cylindrical faces")
+
+draft = Draft(font_size=2, decimal_precision=1)
+labels = []
+for i, face in enumerate(hole_faces):
+    # Use the face center for the leader's anchor; offset for the label
+    c = face.center()
+    leader = DimensionLine(path=[(c.X, c.Y, 0), (c.X + 5, c.Y + 5, 0)],
+                           draft=draft, label=f"H{i+1}")
+    labels.append(leader)
+
+visible, _ = plate.project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+result = Compound(children=list(visible) + labels)
+show(result, "hole_table_demo")""",
+    ),
+
+    Section(
+        label="clean_svg_export",
+        text="""\
+## Clean SVG export — the visual-quality recipe
+# build123d.drafting renders witness ticks and arrowheads as thin closed
+# polygons (filled rectangles, not strokes). Without configuration, an SVG
+# export shows them as outlined rectangles — the "doubled line" look.
+# Three settings turn that into clean engineering output:
+#
+#   1. fill_color = line_color on the dims layer — closed-rect ticks now
+#      render as solid coloured lines instead of outlines.
+#   2. line_weight tuning — thicker for part (0.4-0.5), thin for dims (0.05).
+#   3. Use Color(r,g,b) with explicit RGB values rather than ColorIndex.BLACK,
+#      which gets re-interpreted depending on background colour.
+#
+# This matches what render_view does internally for 2D inputs. Apply it
+# yourself if you want to call ExportSVG directly (e.g. from your own
+# script that runs outside the MCP).
+from build123d import *
+
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+visible, _ = plate.project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+draft = Draft(font_size=2.5, decimal_precision=1)
+length = ExtensionLine(border=[(-20, -10, 0), (20, -10, 0)], offset=8, draft=draft, label="40")
+
+part_color = Color(0, 0, 0)         # explicit black
+dim_color  = Color(0, 0.2, 0.7)     # blue — visually distinct from part
+
+exporter = ExportSVG(margin=10)
+exporter.add_layer("part", line_color=part_color, line_weight=0.5)
+exporter.add_layer(
+    "dims",
+    line_color=dim_color,
+    fill_color=dim_color,             # the killer setting — clean witness ticks
+    line_weight=0.05,
+)
+exporter.add_shape(visible, layer="part")
+exporter.add_shape(length, layer="dims")
+# exporter.write("clean.svg")  # blocked by sandbox; use render_view/export
+
+result = Compound(children=list(visible) + [length])
+show(result, "clean_svg_demo")""",
+    ),
+
+    Section(
+        text="""\
+## Limitations and gaps in build123d.drafting today
+# - No HoleTable class: roll your own via face_inventory + DimensionLine (see above).
+# - No GD&T symbols: surface finish marks, datum triangles, control frames.
+# - No section-view hatching: clip the part with a plane and project the
+#   result, but cross-hatching the cut surface is manual.
+# - No automatic standards selection (ASME Y14.5 vs ISO): the Draft object
+#   gives you font/units/precision; conventions are your responsibility.
+#
+# When you hit any of these, the answer is to compose the lower-level
+# build123d primitives yourself — Sketch + Line + Text + Polyline."""
+    ),
+
+    Section(
+        text="""\
+## When to use which output format
+# - DXF (ExportDXF): standard 2D CAD interchange. Opens in any CAD tool, has
+#   layer support, preserves dimension semantics. Best for fabrication output.
+# - SVG (ExportSVG): web-viewable, easier to embed in docs / wikis. Loses some
+#   CAD-specific metadata. Best for design-review and documentation.
+# - PNG (render_view): for the LLM's own 'eyeball it' check. Don't use for
+#   handoff — projection is rasterised and lossy."""
+    ),
+]
+
+
+def _build123d_version_banner() -> str:
+    """Reflect the actually-installed build123d version so callers know exactly
+    which API surface these examples target."""
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        v = version("build123d")
+    except PackageNotFoundError:
+        v = "unknown"
+    return (
+        f"Examples below were tested against build123d {v}, the version installed "
+        f"in this environment."
+    )
+
+
+def build_drafting_cookbook_text() -> str:
+    return _build123d_version_banner() + "\n\n" + "\n\n".join(s.text for s in SECTIONS)
+
+
+RUNNABLE_EXAMPLES: list[tuple[str, str]] = [
+    (s.label, s.text) for s in SECTIONS if s.label is not None
+]

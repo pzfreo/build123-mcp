@@ -21,7 +21,7 @@ def execute(code: str) -> str:
 
 @mcp.tool()
 def render_view(direction: str = "iso", objects: str = "", quality: str = "standard", clip_plane: str = "", clip_at: float | None = None, azimuth: float = 0.0, elevation: float = 0.0, save_to: str = "", format: str = "png", label_objects: bool = False, highlights: list[dict] | None = None) -> list:
-    """Render model. format: 'png' (raster, default), 'svg' (HLR line drawing — works without a display, no shading but precise edges), 'dxf' (HLR line drawing as DXF — the standard 2D CAD interchange format; use when you need projected polylines as parseable geometry rather than as a raster, e.g. to draw an annotated overlay on top of an accurate base layer instead of redrawing the shape by hand), or 'both' (returns the PNG and SVG together — useful when you want shaded depth cues plus crisp edge geometry). If the raster path fails (typically headless host with no display backend) and format='png', the server falls back to SVG automatically. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path; for format='both' the PNG and SVG are written as <save_to>.png and <save_to>.svg. label_objects: when true, each named object from show() is labelled at its centroid in the PNG. highlights: optional list of specific entities to label, e.g. [{"object": "bracket", "type": "edge", "index": 5, "label": "hinge_edge"}]; type is 'face', 'edge', or 'vertex' and index matches shape.faces()/edges()/vertices() position. The referenced object must already be registered with show() and included in the rendered set. Labels are PNG-only; SVG output is unlabelled."""
+    """Render model. Auto-detects 3D vs 2D inputs: solids go through the VTK tessellation path; 2D shapes (Sketches, Compounds of edges, dimensioned drawings composed via build123d.drafting) go through the ezdxf+matplotlib raster path. Use this to review your dimensioned drawings the same way you review 3D parts. format: 'png' (raster, default), 'svg' (HLR line drawing — works without a display, no shading but precise edges), 'dxf' (HLR line drawing as DXF — the standard 2D CAD interchange format; use when you need projected polylines as parseable geometry rather than as a raster, e.g. to draw an annotated overlay on top of an accurate base layer instead of redrawing the shape by hand), or 'both' (returns the PNG and SVG together — useful when you want shaded depth cues plus crisp edge geometry). If the raster path fails (typically headless host with no display backend) and format='png', the server falls back to SVG automatically. Renders confirm appearance, not geometry — verify boolean operations with measure() before rendering. direction: top, front, side, iso. objects: comma-separated names or name:color pairs e.g. 'u_frame:blue,roller:red' (default: all, auto-coloured). quality: standard, high. clip_plane: x, y, z to slice; clip_at: absolute world coordinate along that axis (default: each mesh's midpoint). azimuth/elevation: camera rotation in degrees applied after the direction preset. save_to: optional file path; for format='both' the PNG and SVG are written as <save_to>.png and <save_to>.svg. label_objects: when true, each named object from show() is labelled at its centroid in the PNG. highlights: optional list of specific entities to label, e.g. [{"object": "bracket", "type": "edge", "index": 5, "label": "hinge_edge"}]; type is 'face', 'edge', or 'vertex' and index matches shape.faces()/edges()/vertices() position. The referenced object must already be registered with show() and included in the rendered set. Labels are PNG-only; SVG output is unlabelled."""
     result = _session.render_view(
         direction=direction, objects=objects, quality=quality,
         clip_plane=clip_plane, clip_at=clip_at, azimuth=azimuth,
@@ -88,7 +88,7 @@ def cross_sections(object_name: str = "", axis: str = "Z", num_slices: int = 10)
 
 @mcp.tool()
 def export(filename: str, format: str = "step", object_name: str = "") -> str:
-    """Export model. format: step, stl, or comma-separated list e.g. 'step,stl'. object_name: named object from show(), '*' to export all named shapes as a combined assembly (default: current shape). STEP exports carry the session names as labels — single-object exports use the object_name, '*' exports produce a Compound labelled 'assembly' with each child labelled by its show() name. Downstream CAD tools (FreeCAD, Fusion) will see the structured assembly with named bodies."""
+    """Export model. format: step, stl, dxf, svg, or comma-separated list e.g. 'step,stl' or 'dxf,svg'. 3D shapes (solids) export to step/stl; 2D shapes (Sketches and dimensioned drawings composed via build123d.drafting) export to dxf/svg. Mixing 2D and 3D formats for the same shape errors with a clear message. object_name: named object from show(), '*' to export all named shapes as a combined assembly (default: current shape). STEP exports carry the session names as labels — single-object exports use the object_name, '*' exports produce a Compound labelled 'assembly' with each child labelled by its show() name. Downstream CAD tools (FreeCAD, Fusion) will see the structured assembly with named bodies. Use dxf for engineering-drawing handoff to other CAD tools; svg for embedding in docs/wikis."""
     return _session.export_file(filename, format, object_name)
 
 
@@ -260,6 +260,16 @@ BUILD123D-MCP WORKFLOW GUIDE
      d) Verify and visualise: measure("part"), render_view(objects="part")
    The timeout ceiling can be raised with --exec-timeout N or BUILD123D_EXEC_TIMEOUT=N.
 
+11.5. 2D ENGINEERING DRAWINGS
+   For dimensioned 2D drawings, use build123d.drafting (Draft / ExtensionLine /
+   DimensionLine / TechnicalDrawing) inside execute() to compose the drawing.
+   The result is a Sketch or Compound — review it with render_view(objects="...")
+   exactly like a 3D part (the server auto-detects 2D and pipes through the
+   ezdxf+matplotlib path), and ship it with export(name, "dxf").
+   Read the build123d://drafting cookbook for runnable examples (project a 3D
+   part, add dimensions with tolerances, multi-view sheet layout, hole table
+   pattern, title block via TechnicalDrawing).
+
 11. IMPORTING EXTERNAL FILES
    After import_cad_file(), the shape is a named object — use render_view(objects="name")
    to visualise it. If the session also contains the original built shape at the same
@@ -297,6 +307,14 @@ def build123d_selectors_cookbook() -> str:
     """build123d selectors cookbook — task-indexed patterns."""
     from build123d_mcp.selectors_cookbook import build_selectors_cookbook_text
     return build_selectors_cookbook_text()
+
+
+@mcp.resource("build123d://drafting", mime_type="text/plain",
+              description="Code-first 2D engineering drawings cookbook: project a 3D part to a 2D view, dimension with ExtensionLine/DimensionLine, add tolerances, compose a TechnicalDrawing title block, multi-view sheet layout, hole-table pattern, export to DXF/SVG.")
+def build123d_drafting_cookbook() -> str:
+    """build123d 2D drafting cookbook — code-first engineering drawings."""
+    from build123d_mcp.drafting_cookbook import build_drafting_cookbook_text
+    return build_drafting_cookbook_text()
 
 
 @mcp.resource("build123d://session", mime_type="application/json",
@@ -343,6 +361,9 @@ Workflow:
    use Joints (RigidJoint/RevoluteJoint/LinearJoint/CylindricalJoint/BallJoint) rather than raw
    .move() — the relationship survives later changes. See build123d://quickref for examples.
 9. When complete: export("part", "step,stl").
+10. For 2D engineering drawings, see the build123d://drafting cookbook. The
+   workflow: build a dimensioned drawing as a Sketch via build123d.drafting,
+   render_view to check it, export(name, "dxf") to ship.
 
 Read the build123d://quickref resource before writing execute() code — it has accurate API syntax.
 Read the build123d://bd_warehouse resource for fastener/bearing/thread catalogue and usage patterns.

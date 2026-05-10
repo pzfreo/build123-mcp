@@ -116,7 +116,7 @@ Render one or more shapes and return a file path to the rendered image.
 - `clip_plane` (string, default `""`) — `x`, `y`, or `z`; clips each mesh at its bounding-box midpoint to expose internal geometry (bores, wall thickness)
 - `clip_at` (float, optional) — absolute world coordinate for the clip plane instead of the midpoint
 - `azimuth` / `elevation` (float, default `0.0`) — camera rotation in degrees applied after the direction preset
-- `format` (string, default `"png"`) — `png`, `svg`, `dxf`, or `both` (= png + svg). DXF returns the projected polylines as parseable 2D CAD geometry — use when a downstream tool (matplotlib, ezdxf, FreeCAD) needs the actual geometry rather than a raster image.
+- `format` (string, default `"png"`) — `png`, `svg`, `dxf`, or `both` (= png + svg). DXF returns the projected polylines as parseable 2D CAD geometry. **Auto-detects 2D inputs**: when the named object is a Sketch or Compound with no solids (a dimensioned drawing built via `build123d.drafting`), `format="png"` rasterises it via ezdxf+matplotlib so the LLM can review the drawing the same way it reviews 3D parts. `label_objects` works for 2D too — adds an MTEXT label at each named object's centroid.
 - `save_to` (string, default `""`) — optional path to also write the file(s) to disk
 - `label_objects` (bool, default `False`) — label each named object from `show()` at its centroid in the PNG. Useful for assemblies where the LLM needs to confirm which shape is which by name.
 - `highlights` (list of dict, default `None`) — label specific faces, edges, or vertices in the PNG. Each entry is `{"object": "name", "type": "face"|"edge"|"vertex", "index": int, "label": "text"}` where `index` matches the position in `shape.faces()` / `.edges()` / `.vertices()`. The referenced object must already be registered with `show()` and included in the rendered set; an unregistered object raises an error naming what to register. Use this to verify "edge 5 is the one I want to fillet" before committing to the operation. Labels are PNG-only — SVG output emits a `label_warnings` notice.
@@ -188,7 +188,7 @@ Export a shape to a file.
 
 **Inputs:**
 - `filename` (string) — target path; extension auto-appended if missing
-- `format` (string, default `"step"`) — `"step"`, `"stl"`, or comma-separated `"step,stl"` to write both in one call
+- `format` (string, default `"step"`) — `"step"`, `"stl"`, `"dxf"`, `"svg"`, or comma-separated like `"step,stl"` or `"dxf,svg"`. 3D solids → step/stl; 2D Sketches/dimensioned drawings → dxf/svg. Mixing dimensions across that boundary errors with a clear pointer at the right tool.
 - `object_name` (string, default `""`) — named object from `show()`; `"*"` to export all named objects as a combined assembly; empty = `current_shape`
 
 **Returns:** path(s) of exported file(s)
@@ -382,6 +382,7 @@ Read-only resources that LLM clients can fetch without spending a tool-call roun
 |-----|-----------|----------|
 | `build123d://quickref` | `text/plain` | build123d API quick reference: primitives, booleans, positioning, sketch-to-3D, selectors, fillets. Every example is tested on each release. Top of the resource shows the installed build123d version the examples were tested against. |
 | `build123d://selectors` | `text/plain` | Task-indexed selector cookbook: get the top face, find circular edges, filter by area/length/radius, `Select.LAST` in builder context, fillet detection, and the operator shortcuts. Every example is tested. Top of the resource shows the installed build123d version. |
+| `build123d://drafting` | `text/plain` | Code-first 2D engineering drawings cookbook: project a 3D part to a view, dimension with `ExtensionLine`/`DimensionLine`, add tolerances, compose a `TechnicalDrawing` title block, multi-view sheet layout, hole-table pattern, export to DXF. Uses build123d's existing `build123d.drafting` primitives — the LLM picks dimensions in code, the library renders them deterministically. |
 | `build123d://session` | `application/json` | Live session state: current shape diagnostics, named objects, snapshots, and Python namespace variables. Equivalent to calling `session_state()`. |
 | `build123d://bd_warehouse` | `text/plain` | Catalogue of pre-built parametric parts from bd_warehouse: bearings, fasteners, gears, pipes, sprockets, threads. Includes class names, descriptions, constructor signatures, and available sizes. |
 

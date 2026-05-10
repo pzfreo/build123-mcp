@@ -526,6 +526,131 @@ def _do_render_dxf(shapes, direction, clip_plane, clip_at, azimuth, elevation) -
             return f.read()
 
 
+def _shapes_are_2d(shapes) -> bool:
+    """True if every input shape is purely 2D (no solids, flat in Z).
+
+    Sketches, edges, wires, and Compounds composed via build123d.drafting
+    have no solids AND lie flat in the XY plane (bbox Z extent ≈ 0). The
+    z-extent check is essential — STL imports are 3D shells with no solids
+    but real Z extent, and they belong on the 3D render path.
+    """
+    for _name, shape, _color in shapes:
+        try:
+            if len(shape.solids()) > 0:
+                return False
+            bb = shape.bounding_box()
+            if bb.size.Z > 1e-6:
+                return False
+        except Exception:
+            return False
+    return True
+
+
+def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
+    """Rasterise a 2D dimensioned drawing to PNG via build123d ExportSVG +
+    resvg-py.
+
+    Why this pipeline: build123d.drafting renders witness ticks and arrowheads
+    as thin closed polygons (filled rectangles, not strokes). The ezdxf+matplotlib
+    path renders these as outlined rectangles (a "doubled" look) and converts
+    text to outlined character boundaries. ExportSVG with the right layer
+    settings produces clean strokes + filled text, and resvg-py rasterises
+    cleanly with bundled Rust wheels (no native cairo dependency).
+
+    Engineering convention applied:
+    - Part geometry: black, line_weight=0.5
+    - Dimensions/annotations: blue, line_weight=0.05, fill_color=line_color
+      (the fill_color match makes the closed-rect witness ticks render as
+      solid coloured lines instead of outlines). The same trick is documented
+      in the build123d://drafting cookbook so an LLM doing custom exports
+      can apply it directly.
+    - Background: white (cairosvg default)
+
+    label_objects: when True, adds a Text annotation below each named
+    object's bbox (not on top of it) so the LLM can identify what it's
+    looking at.
+    """
+    import os as _os
+    import re as _re
+    import tempfile as _tempfile
+    import resvg_py
+    from build123d import Color, Compound, ExportSVG, Text
+
+    part_color = Color(0, 0, 0)
+    dim_color = Color(0, 0.2, 0.7)
+
+    # Augment shapes with label Text if requested.
+    label_shapes = []
+    if label_objects:
+        for name, shape, _color in shapes:
+            if not name or name == "shape":
+                continue
+            try:
+                bb = shape.bounding_box()
+                cx = (bb.min.X + bb.max.X) / 2
+                label_y = bb.min.Y - 6
+                txt = Text(str(name), font_size=3.0)
+                # Text builds at origin; translate to position
+                txt = txt.translate((cx, label_y, 0))
+                label_shapes.append(txt)
+            except Exception:
+                continue
+
+    exporter = ExportSVG(margin=10)
+    if len(shapes) == 1:
+        name, shape, _color = shapes[0]
+        # Black for part geometry, blue for dimensions/annotations
+        exporter.add_layer("part", line_color=part_color, line_weight=0.5)
+        exporter.add_layer(
+            "dims", line_color=dim_color, fill_color=dim_color, line_weight=0.05,
+        )
+        # Walk children: edges → part layer; Sketch faces → dims layer
+        for child in getattr(shape, "children", None) or [shape]:
+            try:
+                if len(child.faces()) > 0:
+                    exporter.add_shape(child, layer="dims")
+                else:
+                    exporter.add_shape(child, layer="part")
+            except Exception:
+                try:
+                    exporter.add_shape(child, layer="part")
+                except Exception:
+                    continue
+    else:
+        for i, (name, shape, _color) in enumerate(shapes):
+            layer = name if name and name != "shape" else f"shape_{i}"
+            exporter.add_layer(layer, line_color=part_color, line_weight=0.5)
+            try:
+                exporter.add_shape(shape, layer=layer)
+            except Exception:
+                continue
+
+    if label_shapes:
+        exporter.add_layer(
+            "_labels", line_color=dim_color, fill_color=dim_color, line_weight=0.05,
+        )
+        for txt in label_shapes:
+            try:
+                exporter.add_shape(txt, layer="_labels")
+            except Exception:
+                continue
+
+    with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+        svg_path = _os.path.join(tmpdir, "drawing.svg")
+        exporter.write(svg_path)
+        with open(svg_path) as f:
+            svg = f.read()
+        # resvg requires unitless or pixel sizes; build123d emits mm. Strip
+        # the unit suffix from the top-level width/height attributes.
+        svg = _re.sub(
+            r'(width|height)="([\d.]+)(mm|cm|in)"', r'\1="\2"', svg, count=2,
+        )
+        png_data = resvg_py.svg_to_bytes(
+            svg_string=svg, width=1200, background="#ffffff",
+        )
+        return bytes(png_data)
+
+
 def render_view(
     session,
     direction: str = "iso",
@@ -568,14 +693,71 @@ def render_view(
 
     shapes = _resolve_shapes(session, objects)
     tess = _QUALITY[quality]
+    result: dict = {}
+
+    # 2D path: shapes carry no solids (sketches, edges, dimensioned drawings
+    # built with build123d.drafting) AND lie flat in Z. Route through the
+    # ExportSVG → resvg-py pipeline instead of VTK tessellation. resvg-py
+    # ships pre-built Rust wheels for all platforms — no native deps.
+    if _shapes_are_2d(shapes):
+        if highlights:
+            result["label_warnings"] = [
+                "highlights are only supported for 3D shapes; ignored for 2D drawings."
+            ]
+        if format in ("png", "both"):
+            try:
+                result["png"] = _do_render_png_2d(shapes, label_objects=label_objects)
+            except Exception as exc:
+                result["png_error"] = f"{type(exc).__name__}: {exc}"
+        if format in ("svg", "both"):
+            # 2D Sketches → SVG via build123d ExportSVG
+            from build123d import ExportSVG
+            import tempfile as _tempfile
+            with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+                svg_exporter = ExportSVG(margin=5)
+                for i, (name, shape, _c) in enumerate(shapes):
+                    layer = name if name and name != "shape" else f"shape_{i}"
+                    svg_exporter.add_layer(layer, line_weight=0.4)
+                    try:
+                        svg_exporter.add_shape(shape, layer=layer)
+                    except Exception:
+                        continue
+                svg_path = os.path.join(tmp, "drawing.svg")
+                svg_exporter.write(svg_path)
+                with open(svg_path, "rb") as f:
+                    result["svg"] = f.read()
+        if format == "dxf":
+            from build123d import ExportDXF
+            import tempfile as _tempfile
+            with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+                dxf_exporter = ExportDXF()
+                for i, (name, shape, _c) in enumerate(shapes):
+                    layer = name if name and name != "shape" else f"shape_{i}"
+                    dxf_exporter.add_layer(layer)
+                    try:
+                        dxf_exporter.add_shape(shape, layer=layer)
+                    except Exception:
+                        continue
+                dxf_path = os.path.join(tmp, "drawing.dxf")
+                dxf_exporter.write(dxf_path)
+                with open(dxf_path, "rb") as f:
+                    result["dxf"] = f.read()
+        if save_to:
+            from build123d_mcp.tools._paths import safe_output_path
+            base, ext = os.path.splitext(save_to)
+            if ext.lower() in (".png", ".svg", ".dxf"):
+                save_to = base
+            for key, suffix in (("png", ".png"), ("svg", ".svg"), ("dxf", ".dxf")):
+                if key in result:
+                    with open(safe_output_path(save_to + suffix), "wb") as f:
+                        f.write(result[key])
+        return result
 
     # Resolve labels up-front so validation errors surface before any rendering work.
     labels: list[tuple[tuple[float, float, float], str]] = []
     if label_objects:
         labels.extend(_resolve_object_labels(shapes))
     labels.extend(_resolve_highlights(session, shapes, highlights))
-
-    result: dict = {}
 
     if (label_objects or highlights) and format in ("svg", "dxf", "both"):
         result["label_warnings"] = [
