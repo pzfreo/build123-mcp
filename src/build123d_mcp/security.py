@@ -150,6 +150,15 @@ OCP_ALLOWLIST = frozenset({
 # When True, import checks are skipped entirely.  Set via --allow-all-imports.
 ALLOW_ALL_IMPORTS: bool = False
 
+# Extra root modules added to the allowlist by the user, on top of IMPORT_ALLOWLIST.
+# Set via --allow-imports. Each entry is a top-level module name; submodules of an
+# allowed root are permitted (e.g. allowing "scipy" lets "scipy.optimize" through).
+EXTRA_ALLOWED_IMPORTS: set[str] = set()
+
+
+def _is_root_allowed(root: str) -> bool:
+    return root in IMPORT_ALLOWLIST or root in EXTRA_ALLOWED_IMPORTS
+
 # Builtins that are dangerous even without an import.
 _BLOCKED_BUILTINS = frozenset({
     "eval", "exec", "compile", "open", "breakpoint", "input",
@@ -224,12 +233,13 @@ def _check_module(dotted_name: str) -> None:
                     f"Permitted OCP modules: {sorted(OCP_ALLOWLIST)}"
                 )
         return  # bare 'OCP' or allowed sub-module
-    if root not in IMPORT_ALLOWLIST:
+    if not _is_root_allowed(root):
+        permitted = sorted(IMPORT_ALLOWLIST | EXTRA_ALLOWED_IMPORTS)
         raise ValueError(
             f"Import of '{dotted_name}' is not allowed. "
             f"This blocks filesystem (os, pathlib, shutil), network (socket, urllib, "
             f"requests), and shell access (subprocess). "
-            f"Permitted: {sorted(IMPORT_ALLOWLIST)}"
+            f"Permitted: {permitted}"
         )
 
 
@@ -269,10 +279,11 @@ def make_restricted_builtins() -> dict[str, Any]:
                         f"This OCP sub-module is blocked (potential file I/O or OS access). "
                         f"Permitted OCP modules: {sorted(OCP_ALLOWLIST)}"
                     )
-        elif root not in IMPORT_ALLOWLIST:
+        elif not _is_root_allowed(root):
+            permitted = sorted(IMPORT_ALLOWLIST | EXTRA_ALLOWED_IMPORTS)
             raise ImportError(
                 f"Import of '{name}' is not allowed. "
-                f"Permitted: {sorted(IMPORT_ALLOWLIST)}"
+                f"Permitted: {permitted}"
             )
         return _original_import(name, *args, **kwargs)
 

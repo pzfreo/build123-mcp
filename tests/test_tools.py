@@ -202,6 +202,54 @@ def test_open_removed_from_builtins(session):
     assert "open" not in session.namespace.get("__builtins__", {})
 
 
+# --- --allow-imports flag (granular allowlist extension) ---
+
+def test_extra_allowed_import_permits_specified_module(monkeypatch):
+    """Modules added via --allow-imports become importable (using a stdlib
+    module that's normally blocked, so the test doesn't depend on optional
+    third-party packages being installed)."""
+    import build123d_mcp.security as _sec
+    monkeypatch.setattr(_sec, "EXTRA_ALLOWED_IMPORTS", set(_sec.EXTRA_ALLOWED_IMPORTS))
+    _sec.EXTRA_ALLOWED_IMPORTS.add("os")
+    s = Session()
+    result = s.execute("import os")
+    assert "not allowed" not in result.lower()
+    assert "Error" not in result
+
+
+def test_extra_allowed_import_permits_submodules(monkeypatch):
+    """Allowing a root module also permits its submodules (e.g. allowing
+    'os' lets 'os.path' through)."""
+    import build123d_mcp.security as _sec
+    monkeypatch.setattr(_sec, "EXTRA_ALLOWED_IMPORTS", set(_sec.EXTRA_ALLOWED_IMPORTS))
+    _sec.EXTRA_ALLOWED_IMPORTS.add("os")
+    s = Session()
+    result = s.execute("import os.path")
+    assert "not allowed" not in result.lower()
+    assert "Error" not in result
+
+
+def test_unspecified_module_still_blocked_when_extras_used(monkeypatch):
+    """Adding 'foo' to extras must NOT allow 'bar'."""
+    import build123d_mcp.security as _sec
+    monkeypatch.setattr(_sec, "EXTRA_ALLOWED_IMPORTS", set(_sec.EXTRA_ALLOWED_IMPORTS))
+    _sec.EXTRA_ALLOWED_IMPORTS.add("os")
+    s = Session()
+    result = s.execute("import subprocess")
+    assert "not allowed" in result.lower()
+
+
+def test_extras_message_lists_added_modules(monkeypatch):
+    """Error message for blocked imports should include user-added extras
+    in the 'Permitted' list so the LLM sees the current state."""
+    import build123d_mcp.security as _sec
+    monkeypatch.setattr(_sec, "EXTRA_ALLOWED_IMPORTS", set(_sec.EXTRA_ALLOWED_IMPORTS))
+    _sec.EXTRA_ALLOWED_IMPORTS.add("os")
+    s = Session()
+    result = s.execute("import subprocess")
+    assert "'os'" in result
+
+
 def test_dir_allowed(session):
     result = execute_code(session, "attrs = dir([])")
     assert "Error" not in result
