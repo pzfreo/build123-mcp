@@ -644,13 +644,13 @@ def render_view(
 
     shapes = _resolve_shapes(session, objects)
     tess = _QUALITY[quality]
+    result: dict = {}
 
     # 2D path: shapes carry no solids (sketches, edges, dimensioned drawings
     # built with build123d.drafting). Route to the 2D renderer/exporter
     # instead of the 3D tessellation pipeline. Single named object that's a
     # composed engineering drawing is the typical case.
     if _shapes_are_2d(shapes):
-        result: dict = {}
         if highlights:
             result["label_warnings"] = [
                 "highlights are only supported for 3D shapes; ignored for 2D drawings."
@@ -665,32 +665,32 @@ def render_view(
             from build123d import ExportSVG
             import tempfile as _tempfile
             with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-                exporter = ExportSVG(margin=5)
+                svg_exporter = ExportSVG(margin=5)
                 for i, (name, shape, _c) in enumerate(shapes):
                     layer = name if name and name != "shape" else f"shape_{i}"
-                    exporter.add_layer(layer, line_weight=0.4)
+                    svg_exporter.add_layer(layer, line_weight=0.4)
                     try:
-                        exporter.add_shape(shape, layer=layer)
+                        svg_exporter.add_shape(shape, layer=layer)
                     except Exception:
                         continue
                 svg_path = os.path.join(tmp, "drawing.svg")
-                exporter.write(svg_path)
+                svg_exporter.write(svg_path)
                 with open(svg_path, "rb") as f:
                     result["svg"] = f.read()
         if format == "dxf":
             from build123d import ExportDXF
             import tempfile as _tempfile
             with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-                exporter = ExportDXF()
+                dxf_exporter = ExportDXF()
                 for i, (name, shape, _c) in enumerate(shapes):
                     layer = name if name and name != "shape" else f"shape_{i}"
-                    exporter.add_layer(layer)
+                    dxf_exporter.add_layer(layer)
                     try:
-                        exporter.add_shape(shape, layer=layer)
+                        dxf_exporter.add_shape(shape, layer=layer)
                     except Exception:
                         continue
                 dxf_path = os.path.join(tmp, "drawing.dxf")
-                exporter.write(dxf_path)
+                dxf_exporter.write(dxf_path)
                 with open(dxf_path, "rb") as f:
                     result["dxf"] = f.read()
         if save_to:
@@ -709,8 +709,6 @@ def render_view(
     if label_objects:
         labels.extend(_resolve_object_labels(shapes))
     labels.extend(_resolve_highlights(session, shapes, highlights))
-
-    result: dict = {}
 
     if (label_objects or highlights) and format in ("svg", "dxf", "both"):
         result["label_warnings"] = [
