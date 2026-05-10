@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.15
+
+### Improvements
+
+- **`execute()` output gains shape deltas and silent-failure warnings** (#81): the diagnostic appended after every `execute()` now shows volume/topology deltas relative to the previous shape (e.g. `volume: 437.2 (-62.8, -12.6%) mm³  |  ... 7f (+1) 15e (+3) 10v (+2)`) and flags two silent failure modes the LLM otherwise sailed past unnoticed — boolean no-ops (cuts that didn't intersect, leaving topology bit-identical) and degenerate results (volume collapsed to ≈ 0). No new MCP tool, no LLM behaviour change required; warnings arrive in the response text the LLM already reads.
+
+### Release process
+
+- **Auto-publish to MCP registry on release** (#82): a new `publish-mcp-registry` job in `publish.yml` mirrors the PyPI publish path. On every `gh release create vX.Y.Z`, after PyPI succeeds, the job authenticates via GitHub OIDC (no stored secret), rewrites `server.json`'s version fields from the release tag, and pushes to `registry.modelcontextprotocol.io`. From this release onward the registry stays in sync with PyPI automatically.
+
+---
+
 ## v0.3.14
 
 This release is "more build123d native" — every change closes a gap where the server was a generic Python sandbox rather than a build123d-aware tool. Five merged PRs:
