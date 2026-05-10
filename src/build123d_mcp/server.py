@@ -219,10 +219,20 @@ BUILD123D-MCP WORKFLOW GUIDE
    Call session_state() for a full JSON view of all active shapes, objects, and snapshots.
    session_state() includes the named-object list — no separate list_objects() call needed.
 
-6. CHECKPOINT BEFORE EXPERIMENTS
+6. CHECKPOINT BEFORE EXPERIMENTS — AND PROPOSALS
    Call save_snapshot("name") before any operation you might want to undo.
    Snapshots are instant. restore_snapshot("name") reverts geometry without re-running code.
    Use diff_snapshot("name") to see what changed; pass format="json" for structured output.
+
+   "What if?" proposals: when asked to evaluate a possible modification (add a hole here,
+   widen this slot, swap this part), the right pattern is:
+       save_snapshot("before")   # cheap; geometry-only
+       <apply the proposed change via execute()>
+       <run analyses: measure(), clearance(), cross_sections(), render_view()>
+       restore_snapshot("before")  # canonical model untouched
+   Use this instead of redrawing the geometry in matplotlib or editing the source file.
+   The 3D mutation + 3D analysis loop is cheaper than re-deriving geometry by hand,
+   and the restore guarantees the canonical model isn't accidentally touched.
 
 7. CROSS-SECTIONS FOR INTERNAL GEOMETRY
    render_view with clip_plane + clip_at reveals interior features.
@@ -326,6 +336,9 @@ Workflow:
 5. Use show(shape, "name") to register important intermediate shapes; it prints vol + face count immediately.
 6. Call render_view() only after measure() confirms the geometry is correct.
 7. Call save_snapshot("name") before any experiment you might want to undo.
+   For "what if?" proposals (add a hole, modify a feature) use the snapshot+restore loop:
+   save_snapshot → mutate via execute → run analyses (measure/clearance/render_view) → restore_snapshot.
+   This is cheaper and more accurate than redrawing geometry in matplotlib to evaluate a change.
 8. For assemblies of two or more parts with a mechanical relationship (mounted, hinged, sliding),
    use Joints (RigidJoint/RevoluteJoint/LinearJoint/CylindricalJoint/BallJoint) rather than raw
    .move() — the relationship survives later changes. See build123d://quickref for examples.
