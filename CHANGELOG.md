@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.16
+
+### Release process
+
+- **Hot-fix the MCP registry auto-publish workflow** (#83): the v0.3.15 publish workflow's first registry-publish run failed because the `mcp-publisher` install step downloaded the asset name as a raw binary, but upstream actually ships a tarball. The hot-fix downloads the `.tar.gz`, extracts it, smoke-tests with `--help`, and adds `-f` to every `curl` so any 4xx/5xx fails the step loudly instead of silently producing a broken binary. It also resolves the latest release tag via the GitHub API rather than the `/releases/latest/download/` shortcut, which had been returning intermittent 502s.
+
+No user-visible code changes — this release exists to validate the registry auto-publish path end-to-end so v0.3.16 lands on `registry.modelcontextprotocol.io` automatically via GitHub OIDC, with no human authentication step.
+
+---
+
 ## v0.3.15
 
 ### Improvements
