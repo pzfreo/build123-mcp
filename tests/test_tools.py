@@ -501,6 +501,36 @@ def test_render_view_dxf_save_to_writes_dxf_file(session, tmp_path, monkeypatch)
     assert (tmp_path / "part.dxf").stat().st_size > 0
 
 
+def test_render_view_dxf_save_to_records_path_in_result(session, tmp_path, monkeypatch):
+    """Regression for #91: render_view must record the on-disk path for save_to
+    output so the MCP wrapper can use it for [SEND:] markers instead of writing
+    a duplicate tempfile. Without this, the LLM gets a /tmp/<random> path back
+    even when it asked for a specific location."""
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "result = Box(20, 10, 5)")
+    out = render_view(session, "top", save_to="part", format="dxf")
+    assert "dxf_path" in out
+    assert out["dxf_path"].endswith("part.dxf")
+    assert os.path.exists(out["dxf_path"])
+
+
+def test_render_view_png_save_to_records_path_in_result(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    execute_code(session, "result = Box(20, 10, 5)")
+    out = render_view(session, "iso", save_to="part", format="png")
+    assert "png_path" in out
+    assert out["png_path"].endswith("part.png")
+
+
+def test_render_view_no_save_to_no_path_in_result(session):
+    """When save_to is empty, no <fmt>_path key is added — the wrapper falls
+    back to writing a tempfile."""
+    execute_code(session, "result = Box(20, 10, 5)")
+    out = render_view(session, "iso", format="png")
+    assert "png" in out
+    assert "png_path" not in out
+
+
 def test_render_view_dxf_save_to_strips_dxf_extension(session, tmp_path, monkeypatch):
     """Passing save_to='part.dxf' should write part.dxf (not part.dxf.dxf)."""
     monkeypatch.chdir(tmp_path)
