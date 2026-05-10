@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.18
+
+This release lands the **`build123d://presentation` cookbook** for design-discussion diagrams plus four follow-up improvements driven by feedback from a real LLM-driven drafting session (#92). The 2D drawing workflow is now substantially more usable for presentation-quality output.
+
+### Features
+
+- **`build123d://presentation` cookbook** (#93): a sister resource to `build123d://drafting`, focused on design-discussion diagrams (vs fabrication handoff). Seven runnable recipes covering Draft auto-scaling for small parts, layered SVG export, filled feature highlights, legends with colour swatches, reference axes, and proportional title blocks.
+- **2D auto-detection honours per-object colour** (#95, #92 F3): multi-object 2D drawings rendered with `objects="plate_a:red,plate_b:blue"` now route through the 2D pipeline AND apply each object's colour. Was previously rendering everything in flat black with no part/dim distinction.
+- **`render_view` `colors=` dict for per-layer control** (#96, #92 F4): optional dict mapping object names and special `_dims`/`_labels` keys to colours. Resolution priority: `colors[name]` > inline `name:color` > shared palette. Use this when presentation diagrams want a specific dim colour (e.g. `darkgreen` against a light part) or fine-grained per-layer hues without restating the whole `objects=` string.
+- **`render_view` explicit `mode=` parameter** (#97, #92 F8): `'auto'` (default) keeps the heuristic; `'2d'` and `'3d'` force a path and error clearly on mismatched shapes. Every render now also reports `render_mode` (`"2d"` or `"3d"`) in the response so the LLM can verify which path actually ran. Closes the silent-routing failure mode where a Compound containing both 2D Sketches and 3D solids ended up in the wrong pipeline.
+
+### Bug fixes
+
+- **`render_view(save_to=…)` now honoured for DXF in the MCP wrapper response** (#94): the function-level `render_view` always wrote to the user's path correctly, but the MCP server wrapper unconditionally wrote a tempfile copy and reported THAT path in the `[SEND:]` marker. The LLM saw `/tmp/build123d_<random>.dxf` even when it asked for a specific location. Same anti-pattern existed for PNG/SVG. Fix: `render_view` now records `result["<fmt>_path"]` for save_to'd files; the wrapper prefers those paths over creating tempfiles.
+
+---
+
 ## v0.3.17
 
 This release closes the loop on **LLM-driven 2D engineering drawings**. The workflow for 2D mirrors what was already there for 3D — write Python, render to review, export to ship — and the underlying drafting library is build123d's own (no MCP-specific dialect).
