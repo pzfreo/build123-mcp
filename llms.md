@@ -355,6 +355,21 @@ Clear the session back to empty state, including all snapshots.
 
 For assemblies of two or more parts with a mechanical relationship (mounted, hinged, sliding), use build123d Joints (`RigidJoint`/`RevoluteJoint`/`LinearJoint`/`CylindricalJoint`/`BallJoint`) rather than positioning parts with `.move()`. The relationship survives later changes to the parent. See `build123d://quickref` for examples.
 
+### Proposals — evaluating "what if?" without touching the canonical model
+
+When asked to evaluate a possible modification ("would adding a hole here weaken the wall?", "what if we widened this slot to 6mm?"), use snapshots as a scratch layer. Don't redraw the geometry in matplotlib to evaluate it — that's lossy and disagrees with the model.
+
+```
+save_snapshot("before")            # cheap; geometry-only
+execute("plate = plate - Cylinder(2, 5).move(Location((10, 0, 0)))")
+clearance("hole_proxy", "plate")   # check wall thickness, piercing, etc.
+cross_sections(plate, axis="Z")    # see internal voids at each Z
+render_view(format="dxf")          # geometry as parseable polylines, not a redraw
+restore_snapshot("before")          # canonical model untouched
+```
+
+The 3D mutation + 3D analysis loop is faster, more accurate, and uses the same primitives as the rest of the workflow.
+
 ---
 
 ---
