@@ -260,15 +260,27 @@ BUILD123D-MCP WORKFLOW GUIDE
      d) Verify and visualise: measure("part"), render_view(objects="part")
    The timeout ceiling can be raised with --exec-timeout N or BUILD123D_EXEC_TIMEOUT=N.
 
-11.5. 2D ENGINEERING DRAWINGS
+11.5. 2D DRAWINGS — TWO FLAVOURS
    For dimensioned 2D drawings, use build123d.drafting (Draft / ExtensionLine /
    DimensionLine / TechnicalDrawing) inside execute() to compose the drawing.
    The result is a Sketch or Compound — review it with render_view(objects="...")
    exactly like a 3D part (the server auto-detects 2D and pipes through the
    ezdxf+matplotlib path), and ship it with export(name, "dxf").
-   Read the build123d://drafting cookbook for runnable examples (project a 3D
-   part, add dimensions with tolerances, multi-view sheet layout, hole table
-   pattern, title block via TechnicalDrawing).
+
+   Two cookbooks for two audiences:
+   - build123d://drafting — engineering drawings for fabrication: tolerance
+     dims, TechnicalDrawing title block, multi-view sheets, hole tables.
+     Two-colour output (black part + blue dims).
+   - build123d://presentation — design-discussion diagrams: per-group colour
+     via ExportSVG layers, filled feature highlights, legends, reference
+     axes, Draft scaling for small parts. Multi-colour SVG, run from a
+     small script outside the MCP sandbox (the sandbox blocks
+     ExportSVG.write()). Use this for chat / doc / proposal output.
+
+   The defining recipe in the presentation cookbook is "scale Draft to your
+   part size" — Draft defaults are tuned for A4, and on a 25-mm-wide part the
+   default line_width=0.5 and arrow_length=3.0 make witness lines render as
+   thick filled rectangles. Override every parameter, not just font_size.
 
 11. IMPORTING EXTERNAL FILES
    After import_cad_file(), the shape is a named object — use render_view(objects="name")
@@ -317,6 +329,14 @@ def build123d_drafting_cookbook() -> str:
     return build_drafting_cookbook_text()
 
 
+@mcp.resource("build123d://presentation", mime_type="text/plain",
+              description="Code-first design-discussion diagrams: per-group colour via ExportSVG layers, filled feature highlights, legends with swatches, reference axes, titles, and Draft scaling for small parts. Sister cookbook to build123d://drafting (which targets fabrication handoff).")
+def build123d_presentation_cookbook() -> str:
+    """build123d presentation cookbook — discussion diagrams (vs drafting's fab drawings)."""
+    from build123d_mcp.presentation_cookbook import build_presentation_cookbook_text
+    return build_presentation_cookbook_text()
+
+
 @mcp.resource("build123d://session", mime_type="application/json",
               description="Live session state: current shape diagnostics, named objects, snapshots, and user-defined variables.")
 def build123d_session_state() -> str:
@@ -361,9 +381,11 @@ Workflow:
    use Joints (RigidJoint/RevoluteJoint/LinearJoint/CylindricalJoint/BallJoint) rather than raw
    .move() — the relationship survives later changes. See build123d://quickref for examples.
 9. When complete: export("part", "step,stl").
-10. For 2D engineering drawings, see the build123d://drafting cookbook. The
-   workflow: build a dimensioned drawing as a Sketch via build123d.drafting,
-   render_view to check it, export(name, "dxf") to ship.
+10. For 2D drawings, two cookbooks for two audiences:
+   - build123d://drafting   — engineering drawings for fabrication handoff.
+   - build123d://presentation — design-discussion diagrams (per-group colour,
+     filled features, legends, axes, titles). Read this when the audience is
+     a human reviewing a design rather than a fabricator.
 
 Read the build123d://quickref resource before writing execute() code — it has accurate API syntax.
 Read the build123d://bd_warehouse resource for fastener/bearing/thread catalogue and usage patterns.
