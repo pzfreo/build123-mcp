@@ -257,6 +257,50 @@ show(result, "hole_table_demo")""",
     ),
 
     Section(
+        label="clean_svg_export",
+        text="""\
+## Clean SVG export — the visual-quality recipe
+# build123d.drafting renders witness ticks and arrowheads as thin closed
+# polygons (filled rectangles, not strokes). Without configuration, an SVG
+# export shows them as outlined rectangles — the "doubled line" look.
+# Three settings turn that into clean engineering output:
+#
+#   1. fill_color = line_color on the dims layer — closed-rect ticks now
+#      render as solid coloured lines instead of outlines.
+#   2. line_weight tuning — thicker for part (0.4-0.5), thin for dims (0.05).
+#   3. Use Color(r,g,b) with explicit RGB values rather than ColorIndex.BLACK,
+#      which gets re-interpreted depending on background colour.
+#
+# This matches what render_view does internally for 2D inputs. Apply it
+# yourself if you want to call ExportSVG directly (e.g. from your own
+# script that runs outside the MCP).
+from build123d import *
+
+plate = Box(40, 20, 5) - Cylinder(3, 5).move(Location((10, 0, 0)))
+visible, _ = plate.project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+draft = Draft(font_size=2.5, decimal_precision=1)
+length = ExtensionLine(border=[(-20, -10, 0), (20, -10, 0)], offset=8, draft=draft, label="40")
+
+part_color = Color(0, 0, 0)         # explicit black
+dim_color  = Color(0, 0.2, 0.7)     # blue — visually distinct from part
+
+exporter = ExportSVG(margin=10)
+exporter.add_layer("part", line_color=part_color, line_weight=0.5)
+exporter.add_layer(
+    "dims",
+    line_color=dim_color,
+    fill_color=dim_color,             # the killer setting — clean witness ticks
+    line_weight=0.05,
+)
+exporter.add_shape(visible, layer="part")
+exporter.add_shape(length, layer="dims")
+# exporter.write("clean.svg")  # blocked by sandbox; use render_view/export
+
+result = Compound(children=list(visible) + [length])
+show(result, "clean_svg_demo")""",
+    ),
+
+    Section(
         text="""\
 ## Limitations and gaps in build123d.drafting today
 # - No HoleTable class: roll your own via face_inventory + DimensionLine (see above).

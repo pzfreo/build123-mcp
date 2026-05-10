@@ -22,6 +22,8 @@ dependencies = [
     # Soft pin to the tested-against major+minor; bump deliberately.
     "build123d>=0.10,<0.11",
     "bd_warehouse",
+    # SVG → PNG rasterisation for 2D drawing review (render_view path)
+    "cairosvg",
 ]
 
 [project.urls]

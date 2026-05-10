@@ -543,63 +543,97 @@ def _shapes_are_2d(shapes) -> bool:
 
 
 def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
-    """Rasterise a 2D dimensioned drawing to PNG.
+    """Rasterise a 2D dimensioned drawing to PNG via build123d ExportSVG +
+    cairosvg.
 
-    Pipes the shapes through ExportDXF (in-memory) then ezdxf's matplotlib
-    drawing backend. Each shape gets its own DXF layer named after its
-    session name so the LLM (and downstream CAD tools) can tell them apart.
+    Why this pipeline: build123d.drafting renders witness ticks and arrowheads
+    as thin closed polygons (filled rectangles, not strokes). The ezdxf+matplotlib
+    path renders these as outlined rectangles (a "doubled" look) and converts
+    text to outlined character boundaries. ExportSVG with the right layer
+    settings produces clean strokes + filled text, and cairosvg gives a faithful
+    PNG.
 
-    label_objects: when True, adds a TEXT entity at each named shape's
-    centroid so the LLM can identify what it's looking at — same role as
-    the VTK billboard labels in the 3D path.
+    Engineering convention applied:
+    - Part geometry: black, line_weight=0.5
+    - Dimensions/annotations: blue, line_weight=0.05, fill_color=line_color
+      (the fill_color match makes the closed-rect witness ticks render as
+      solid coloured lines instead of outlines). The same trick is documented
+      in the build123d://drafting cookbook so an LLM doing custom exports
+      can apply it directly.
+    - Background: white (cairosvg default)
+
+    label_objects: when True, adds a Text annotation below each named
+    object's bbox (not on top of it) so the LLM can identify what it's
+    looking at.
     """
     import os as _os
     import tempfile as _tempfile
-    import matplotlib
-    matplotlib.use("Agg")
-    from build123d import ExportDXF
-    import ezdxf
-    from ezdxf.addons.drawing import matplotlib as ezmpl
+    import cairosvg
+    from build123d import Color, Compound, ExportSVG, Text
 
-    exporter = ExportDXF()
-    for i, (name, shape, _color) in enumerate(shapes):
-        layer = name if name and name != "shape" else f"shape_{i}"
-        exporter.add_layer(layer)
-        try:
-            exporter.add_shape(shape, layer=layer)
-        except Exception:
-            continue
+    part_color = Color(0, 0, 0)
+    dim_color = Color(0, 0.2, 0.7)
 
-    with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
-        dxf_path = _os.path.join(tmpdir, "drawing.dxf")
-        png_path = _os.path.join(tmpdir, "drawing.png")
-        exporter.write(dxf_path)
+    # Augment shapes with label Text if requested.
+    label_shapes = []
+    if label_objects:
+        for name, shape, _color in shapes:
+            if not name or name == "shape":
+                continue
+            try:
+                bb = shape.bounding_box()
+                cx = (bb.min.X + bb.max.X) / 2
+                label_y = bb.min.Y - 6
+                txt = Text(str(name), font_size=3.0)
+                # Text builds at origin; translate to position
+                txt = txt.translate((cx, label_y, 0))
+                label_shapes.append(txt)
+            except Exception:
+                continue
 
-        # Reopen the DXF so we can add labels and re-render. Adding labels via
-        # raw ezdxf TEXT entities is simpler than threading them through the
-        # build123d ExportDXF wrapper.
-        doc = ezdxf.readfile(dxf_path)
-        if label_objects:
-            msp = doc.modelspace()
-            doc.layers.add(name="_labels", color=1)
-            for _i, (name, shape, _color) in enumerate(shapes):
-                if not name or name == "shape":
-                    continue
+    exporter = ExportSVG(margin=10)
+    if len(shapes) == 1:
+        name, shape, _color = shapes[0]
+        # Black for part geometry, blue for dimensions/annotations
+        exporter.add_layer("part", line_color=part_color, line_weight=0.5)
+        exporter.add_layer(
+            "dims", line_color=dim_color, fill_color=dim_color, line_weight=0.05,
+        )
+        # Walk children: edges → part layer; Sketch faces → dims layer
+        for child in getattr(shape, "children", None) or [shape]:
+            try:
+                if len(child.faces()) > 0:
+                    exporter.add_shape(child, layer="dims")
+                else:
+                    exporter.add_shape(child, layer="part")
+            except Exception:
                 try:
-                    bb = shape.bounding_box()
-                    cx = (bb.min.X + bb.max.X) / 2
-                    cy = (bb.min.Y + bb.max.Y) / 2
+                    exporter.add_shape(child, layer="part")
                 except Exception:
                     continue
-                # MTEXT renders consistently in the matplotlib backend
-                msp.add_mtext(
-                    str(name),
-                    dxfattribs={"layer": "_labels", "char_height": 4.0},
-                ).set_location((cx, cy))
+    else:
+        for i, (name, shape, _color) in enumerate(shapes):
+            layer = name if name and name != "shape" else f"shape_{i}"
+            exporter.add_layer(layer, line_color=part_color, line_weight=0.5)
+            try:
+                exporter.add_shape(shape, layer=layer)
+            except Exception:
+                continue
 
-        ezmpl.qsave(doc.modelspace(), png_path, dpi=150, size_inches=(8, 6))
-        with open(png_path, "rb") as f:
-            return f.read()
+    if label_shapes:
+        exporter.add_layer(
+            "_labels", line_color=dim_color, fill_color=dim_color, line_weight=0.05,
+        )
+        for txt in label_shapes:
+            try:
+                exporter.add_shape(txt, layer="_labels")
+            except Exception:
+                continue
+
+    with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+        svg_path = _os.path.join(tmpdir, "drawing.svg")
+        exporter.write(svg_path)
+        return cairosvg.svg2png(url=svg_path, output_width=1200, background_color="white")
 
 
 def render_view(
