@@ -592,6 +592,41 @@ def test_render_view_2d_save_to_writes_png(session, tmp_path, monkeypatch):
     assert (tmp_path / "out.png").exists()
 
 
+def test_render_view_2d_multi_object_uses_2d_path(session):
+    """Regression for #92 F3: multi-object 2D inputs (e.g. two parts both
+    composed via build123d.drafting) must render through the 2D pipeline,
+    not fall back to 3D VTK. The detection is: every shape has no solids
+    AND lies flat in Z."""
+    execute_code(session, """
+plate_a, _ = (Box(20, 20, 5)).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0)), None
+visible_a, _ = Box(20, 20, 5).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+visible_b, _ = Box(15, 15, 3).move(Location((25, 0, 0))).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+show(Compound(children=list(visible_a)), 'plate_a')
+show(Compound(children=list(visible_b)), 'plate_b')
+""")
+    out = render_view(session, objects="plate_a,plate_b", format="dxf")
+    text = out["dxf"].decode("utf-8", errors="ignore")
+    # Multi-object 2D path produces per-object _part layers
+    assert "plate_a_part" in text
+    assert "plate_b_part" in text
+
+
+def test_render_view_2d_multi_object_honours_per_object_colour(session):
+    """F3: name:color syntax should propagate through the 2D path so
+    visualisations of multi-part 2D drawings render in the requested hues."""
+    execute_code(session, """
+visible_a, _ = Box(20, 20, 5).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+visible_b, _ = Box(15, 15, 3).move(Location((25, 0, 0))).project_to_viewport((0, 0, 100), (0, 1, 0), (0, 0, 0))
+show(Compound(children=list(visible_a)), 'plate_a')
+show(Compound(children=list(visible_b)), 'plate_b')
+""")
+    out = render_view(session, objects="plate_a:red,plate_b:blue", format="svg")
+    text = out["svg"].decode("utf-8", errors="ignore")
+    # Red ≈ 255,0,0; blue ≈ 0,0,255 — SVG embeds explicit RGB on each layer
+    assert "rgb(255,0,0)" in text or "rgb(255, 0, 0)" in text
+    assert "rgb(0,0,255)" in text or "rgb(0, 0, 255)" in text
+
+
 # --- export 2D drafting ---
 
 def test_export_2d_to_dxf(session, tmp_path, monkeypatch):
