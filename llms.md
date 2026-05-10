@@ -2,6 +2,28 @@
 
 build123d-mcp is an MCP server that wraps the [build123d](https://github.com/gumyr/build123d) Python CAD library. It gives you tools to build 3D geometry incrementally, render views, measure dimensions, export files, snapshot state, inspect session state, and verify dependencies.
 
+## Sandbox — what your `execute()` code can and can't do
+
+This server enforces a Python-level sandbox on every `execute()` call. Three layers run before your code:
+
+1. **Import allowlist** — only `build123d`, `bd_warehouse`, `math`, `numpy`, `inspect`, the safe stdlib subset (collections, itertools, functools, copy, typing, dataclasses, enum, re, json, base64, hashlib, …), and curated geometric OCP submodules are importable. Filesystem (`os`, `pathlib`, `shutil`), networking (`socket`, `urllib`, `requests`), and shell access (`subprocess`) are blocked. The full allowlist is in the error message of any blocked import.
+2. **Restricted builtins** — `open`, `eval`, `exec`, `compile`, `breakpoint`, `input`, and the introspection helpers `getattr`/`vars`/`hasattr` are removed (the last three because string arguments would let you bypass the dunder-attribute block).
+3. **Execution timeout** — wall-clock limit (default 120 s).
+
+If a script truly needs an extra package (e.g. `scipy.optimize` to size a parametric part), the server operator can extend the allowlist via `--allow-imports scipy,pandas` — the LLM doesn't control this, but a blocked-import error message names the attempted module so the user can decide whether to add it.
+
+Practical implications for your code:
+
+- Never `import os`, `import pathlib`, `import subprocess`, `import socket`, `import urllib`, `import requests` — all blocked.
+- Never call `eval()`, `exec()`, `open()` — blocked at the builtin level.
+- Never write `obj.__class__.__bases__[0]` or similar dunder-attribute access — AST-blocked.
+- Use `inspect.signature(ClassName)` and `inspect.getdoc()` for API discovery; both are allowed.
+- File I/O happens through MCP tools (`export`, `import_cad_file`, `render_view(save_to=)`) — never directly.
+
+If you see "Import of 'X' is not allowed" or "Call to 'Y' is not allowed", the user code hit a sandbox layer; don't try to bypass it, just use the MCP tools or change approach.
+
+---
+
 ## Key concept: persistent session
 
 All tool calls share a single Python namespace. Variables and shapes you create with `execute` persist across subsequent calls. Use this to build geometry step by step, checking your work after each step.

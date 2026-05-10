@@ -394,6 +394,15 @@ Part library file format (Python, any .py file under --library path):
              "Use only in trusted environments. Overrides BUILD123D_ALLOW_ALL_IMPORTS env var.",
     )
     parser.add_argument(
+        "--allow-imports", metavar="MODULES",
+        default=os.environ.get("BUILD123D_ALLOW_IMPORTS", ""),
+        help="Comma-separated extra modules added to the import allowlist on top of "
+             "the defaults (e.g. --allow-imports scipy,pandas). Each entry permits the "
+             "named module and all its submodules. Use this for CAD scripts that need "
+             "extra packages without disabling the sandbox via --allow-all-imports. "
+             "Overrides BUILD123D_ALLOW_IMPORTS env var.",
+    )
+    parser.add_argument(
         "--exec-timeout", metavar="SECONDS", type=int,
         default=int(os.environ.get("BUILD123D_EXEC_TIMEOUT", "120")),
         help="Execution time limit in seconds for user code (default: 120). "
@@ -404,13 +413,25 @@ Part library file format (Python, any .py file under --library path):
     if args.library and not os.path.isdir(args.library):
         parser.error(f"Library path is not a directory: {args.library}")
 
-    if args.allow_all_imports:
+    extra_imports = tuple(
+        m.strip() for m in args.allow_imports.split(",") if m.strip()
+    )
+
+    if args.allow_all_imports or extra_imports:
         import build123d_mcp.security as _sec
-        _sec.ALLOW_ALL_IMPORTS = True
+        if args.allow_all_imports:
+            _sec.ALLOW_ALL_IMPORTS = True
+        if extra_imports:
+            _sec.EXTRA_ALLOWED_IMPORTS.update(extra_imports)
 
     global _session, _has_library
     _has_library = bool(args.library)
-    _session = WorkerSession(library_path=args.library, allow_all_imports=args.allow_all_imports, exec_timeout=args.exec_timeout)
+    _session = WorkerSession(
+        library_path=args.library,
+        allow_all_imports=args.allow_all_imports,
+        extra_allowed_imports=extra_imports,
+        exec_timeout=args.exec_timeout,
+    )
 
     mcp.run()
 

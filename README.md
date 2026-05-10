@@ -109,6 +109,38 @@ bd_warehouse is a full fastener system, not just a thread library. Always:
 
 See `build123d://bd_warehouse` (MCP resource) for the full catalogue and usage patterns.
 
+## Security
+
+Unlike CAD MCP servers that simply `exec()` user code, build123d-mcp ships with **defence-in-depth sandboxing** so the server is reasonable to expose to LLM-generated and untrusted prompts. Three layers, all applied before user code runs:
+
+1. **AST inspection** — rejects imports of anything outside the allowlist (`build123d`, `bd_warehouse`, `math`, `numpy`, `inspect`, plus the rest of the safe stdlib subset and a curated set of geometric OCP submodules), blocks `eval`/`exec`/`compile`/`open`, and refuses dunder attribute access (the most common Python sandbox-escape route).
+2. **Restricted builtins** — the `__builtins__` exposed to user code has the dangerous functions removed and `__import__` rewrapped to enforce the same allowlist at runtime, so a payload that bypasses the AST check still hits the wall on import.
+3. **Execution timeout** — wall-clock limit (default 120 s, `--exec-timeout N` to override) enforced via SIGALRM, with the worker process restarted on breach so a hung script can't hold the session forever.
+
+Filesystem I/O modules (`os`, `pathlib`, `shutil`), networking (`socket`, `urllib`, `requests`), shell access (`subprocess`), and the OCP file-I/O submodules (`STEPControl`, `IGESControl`, `OSD`, …) are **all blocked**. Path traversal is rejected for `export()` and `render_view(save_to=)`.
+
+This is not a perfect sandbox — memory exhaustion isn't bounded, and Python introspection chains via build123d internals could in principle escape — but it raises the bar significantly against realistic prompt-injection payloads.
+
+### Extending or relaxing the sandbox
+
+Two CLI flags let you adjust the import policy without giving up the rest of the layers:
+
+- `--allow-imports scipy,pandas` — extend the allowlist with named modules. Each entry permits the named root and all its submodules. Use for CAD scripts that need extra packages.
+- `--allow-all-imports` — disable the import allowlist entirely. The other layers (restricted builtins for `open`/`eval`/etc, exec timeout, dunder-attribute block) still apply. **Use only in trusted environments or under OS-level isolation** (see below).
+
+Both flags also accept their values via env var (`BUILD123D_ALLOW_IMPORTS`, `BUILD123D_ALLOW_ALL_IMPORTS`).
+
+### Stronger isolation: OS-level sandboxing
+
+For deployments that need stronger guarantees than Python-level checks (e.g. exposing the server to truly untrusted input, or running with `--allow-all-imports`), wrap the whole MCP server in an OS-level sandbox:
+
+- **[`@anthropic-ai/sandbox-runtime`](https://github.com/anthropic-experimental/sandbox-runtime)** — Anthropic's official sandbox runtime, designed exactly for this. The Claude Code docs explicitly call out wrapping MCP servers: `npx @anthropic-ai/sandbox-runtime <command-to-sandbox>`.
+- **Docker / containers** — generic approach; many community MCP-sandbox wrappers exist (e.g. [`pottekkat/sandbox-mcp`](https://github.com/pottekkat/sandbox-mcp), [`Automata-Labs-team/code-sandbox-mcp`](https://github.com/Automata-Labs-team/code-sandbox-mcp)). Run build123d-mcp inside a minimal container with no host filesystem mounts and no network egress.
+- **Claude Code's sandbox** (`/sandbox` command, macOS Seatbelt or Linux bubblewrap) — if you're running build123d-mcp under Claude Code, the host's sandbox already restricts what subprocesses can touch.
+- **Cursor / IDE dev containers** — Cursor doesn't ship MCP-specific sandboxing, but you can run the server inside a dev container that the IDE attaches to.
+
+Inside any of these, **`--allow-all-imports` becomes a reasonable default**: the OS-level isolation handles the security, and the Python-level allowlist becomes redundant friction. The recommended high-security recipe is `sandbox-runtime` (or a container) + `--allow-all-imports` + a strict exec timeout.
+
 ## Requirements
 
 - [uv](https://github.com/astral-sh/uv)
