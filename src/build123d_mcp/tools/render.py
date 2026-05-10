@@ -596,11 +596,21 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
             except Exception:
                 continue
 
+    def _resolve_part_color(supplied: str | None, index: int) -> "Color":
+        """Honour user-supplied colour for a named object, else cycle the
+        shared palette so multi-object drawings get distinct hues by default."""
+        token = supplied if supplied else _PALETTE[index % len(_PALETTE)]
+        try:
+            return Color(*_color_to_rgb(token))
+        except Exception:
+            return part_color
+
     exporter = ExportSVG(margin=10)
     if len(shapes) == 1:
-        name, shape, _color = shapes[0]
-        # Black for part geometry, blue for dimensions/annotations
-        exporter.add_layer("part", line_color=part_color, line_weight=0.5)
+        name, shape, obj_color = shapes[0]
+        single_part_color = _resolve_part_color(obj_color, 0) if obj_color else part_color
+        # Per-object part colour, shared blue for dimensions/annotations
+        exporter.add_layer("part", line_color=single_part_color, line_weight=0.5)
         exporter.add_layer(
             "dims", line_color=dim_color, fill_color=dim_color, line_weight=0.05,
         )
@@ -617,13 +627,30 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
                 except Exception:
                     continue
     else:
-        for i, (name, shape, _color) in enumerate(shapes):
-            layer = name if name and name != "shape" else f"shape_{i}"
-            exporter.add_layer(layer, line_color=part_color, line_weight=0.5)
-            try:
-                exporter.add_shape(shape, layer=layer)
-            except Exception:
-                continue
+        # Multi-object: each named object gets its own colour-coded part layer
+        # plus a per-object dims layer in the shared annotation colour. Splits
+        # children the same way as the single-object path so dims read clearly
+        # against any part colour.
+        for i, (name, shape, obj_color) in enumerate(shapes):
+            base = name if name and name != "shape" else f"shape_{i}"
+            obj_part_color = _resolve_part_color(obj_color, i)
+            part_layer = f"{base}_part"
+            dims_layer = f"{base}_dims"
+            exporter.add_layer(part_layer, line_color=obj_part_color, line_weight=0.5)
+            exporter.add_layer(
+                dims_layer, line_color=dim_color, fill_color=dim_color, line_weight=0.05,
+            )
+            for child in getattr(shape, "children", None) or [shape]:
+                try:
+                    if len(child.faces()) > 0:
+                        exporter.add_shape(child, layer=dims_layer)
+                    else:
+                        exporter.add_shape(child, layer=part_layer)
+                except Exception:
+                    try:
+                        exporter.add_shape(child, layer=part_layer)
+                    except Exception:
+                        continue
 
     if label_shapes:
         exporter.add_layer(
@@ -710,34 +737,60 @@ def render_view(
             except Exception as exc:
                 result["png_error"] = f"{type(exc).__name__}: {exc}"
         if format in ("svg", "both"):
-            # 2D Sketches → SVG via build123d ExportSVG
-            from build123d import ExportSVG
+            # 2D Sketches → SVG via ExportSVG with per-object colour and
+            # part/dims layer split (mirrors the PNG path).
+            from build123d import Color, ExportSVG
             import tempfile as _tempfile
+            dim_col = Color(0, 0.2, 0.7)
             with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                 svg_exporter = ExportSVG(margin=5)
-                for i, (name, shape, _c) in enumerate(shapes):
-                    layer = name if name and name != "shape" else f"shape_{i}"
-                    svg_exporter.add_layer(layer, line_weight=0.4)
+                for i, (name, shape, obj_color) in enumerate(shapes):
+                    base = name if name and name != "shape" else f"shape_{i}"
+                    token = obj_color if obj_color else _PALETTE[i % len(_PALETTE)]
                     try:
-                        svg_exporter.add_shape(shape, layer=layer)
+                        part_col = Color(*_color_to_rgb(token))
                     except Exception:
-                        continue
+                        part_col = Color(0, 0, 0)
+                    part_layer = f"{base}_part"
+                    dims_layer = f"{base}_dims"
+                    svg_exporter.add_layer(part_layer, line_color=part_col, line_weight=0.4)
+                    svg_exporter.add_layer(dims_layer, line_color=dim_col, fill_color=dim_col, line_weight=0.05)
+                    for child in getattr(shape, "children", None) or [shape]:
+                        try:
+                            target = dims_layer if len(child.faces()) > 0 else part_layer
+                            svg_exporter.add_shape(child, layer=target)
+                        except Exception:
+                            try:
+                                svg_exporter.add_shape(child, layer=part_layer)
+                            except Exception:
+                                continue
                 svg_path = os.path.join(tmp, "drawing.svg")
                 svg_exporter.write(svg_path)
                 with open(svg_path, "rb") as f:
                     result["svg"] = f.read()
         if format == "dxf":
+            # 2D Sketches → DXF via ExportDXF. DXF colours use the small ACI
+            # palette, so per-object hues are layer-only here — most DXF
+            # viewers let users colour by layer in their own preferences.
             from build123d import ExportDXF
             import tempfile as _tempfile
             with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                 dxf_exporter = ExportDXF()
-                for i, (name, shape, _c) in enumerate(shapes):
-                    layer = name if name and name != "shape" else f"shape_{i}"
-                    dxf_exporter.add_layer(layer)
-                    try:
-                        dxf_exporter.add_shape(shape, layer=layer)
-                    except Exception:
-                        continue
+                for i, (name, shape, _obj_color) in enumerate(shapes):
+                    base = name if name and name != "shape" else f"shape_{i}"
+                    part_layer = f"{base}_part"
+                    dims_layer = f"{base}_dims"
+                    dxf_exporter.add_layer(part_layer)
+                    dxf_exporter.add_layer(dims_layer)
+                    for child in getattr(shape, "children", None) or [shape]:
+                        try:
+                            target = dims_layer if len(child.faces()) > 0 else part_layer
+                            dxf_exporter.add_shape(child, layer=target)
+                        except Exception:
+                            try:
+                                dxf_exporter.add_shape(child, layer=part_layer)
+                            except Exception:
+                                continue
                 dxf_path = os.path.join(tmp, "drawing.dxf")
                 dxf_exporter.write(dxf_path)
                 with open(dxf_path, "rb") as f:
