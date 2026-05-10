@@ -527,57 +527,35 @@ def _do_render_dxf(shapes, direction, clip_plane, clip_at, azimuth, elevation) -
 
 
 def _shapes_are_2d(shapes) -> bool:
-    """True if every input shape is purely 2D (no solids).
+    """True if every input shape is purely 2D (no solids, flat in Z).
 
-    Sketches, edges, wires, and Compounds containing only those count as 2D.
-    The 2D path applies to dimensioned drawings composed via build123d.drafting
-    primitives (ExtensionLine, DimensionLine, TechnicalDrawing).
+    Sketches, edges, wires, and Compounds composed via build123d.drafting
+    have no solids AND lie flat in the XY plane (bbox Z extent ≈ 0). The
+    z-extent check is essential — STL imports are 3D shells with no solids
+    but real Z extent, and they belong on the 3D render path.
     """
     for _name, shape, _color in shapes:
         try:
             if len(shape.solids()) > 0:
+                return False
+            bb = shape.bounding_box()
+            if bb.size.Z > 1e-6:
                 return False
         except Exception:
             return False
     return True
 
 
-def _cairo_available() -> bool:
-    """True if cairosvg can find its native cairo library.
-
-    Cached after the first probe — repeated render_view calls don't re-load
-    the library. Lets the 2D path fall back cleanly to SVG-only output on
-    systems without libcairo (typically macOS / Windows users who haven't
-    installed it manually).
-    """
-    global _CAIRO_AVAILABLE
-    if _CAIRO_AVAILABLE is not None:
-        return _CAIRO_AVAILABLE
-    try:
-        import cairosvg  # noqa: F401
-        # Force-trigger the dlopen by rendering a trivial SVG
-        cairosvg.svg2png(
-            bytestring=b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
-        )
-        _CAIRO_AVAILABLE = True
-    except Exception:
-        _CAIRO_AVAILABLE = False
-    return _CAIRO_AVAILABLE
-
-
-_CAIRO_AVAILABLE: bool | None = None
-
-
 def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
     """Rasterise a 2D dimensioned drawing to PNG via build123d ExportSVG +
-    cairosvg.
+    resvg-py.
 
     Why this pipeline: build123d.drafting renders witness ticks and arrowheads
     as thin closed polygons (filled rectangles, not strokes). The ezdxf+matplotlib
     path renders these as outlined rectangles (a "doubled" look) and converts
     text to outlined character boundaries. ExportSVG with the right layer
-    settings produces clean strokes + filled text, and cairosvg gives a faithful
-    PNG.
+    settings produces clean strokes + filled text, and resvg-py rasterises
+    cleanly with bundled Rust wheels (no native cairo dependency).
 
     Engineering convention applied:
     - Part geometry: black, line_weight=0.5
@@ -593,8 +571,9 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
     looking at.
     """
     import os as _os
+    import re as _re
     import tempfile as _tempfile
-    import cairosvg
+    import resvg_py
     from build123d import Color, Compound, ExportSVG, Text
 
     part_color = Color(0, 0, 0)
@@ -659,18 +638,17 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
     with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         svg_path = _os.path.join(tmpdir, "drawing.svg")
         exporter.write(svg_path)
-        try:
-            return cairosvg.svg2png(url=svg_path, output_width=1200, background_color="white")
-        except OSError as exc:
-            # cairosvg can't find the cairo native library. Surface a
-            # specific, actionable error so the user knows what to install.
-            raise RuntimeError(
-                "2D PNG rendering requires the cairo native library. "
-                "Install it: 'brew install cairo' (macOS), "
-                "'apt-get install libcairo2' (Debian/Ubuntu), "
-                "or use the GTK runtime on Windows. "
-                "Underlying error: " + str(exc)
-            ) from exc
+        with open(svg_path) as f:
+            svg = f.read()
+        # resvg requires unitless or pixel sizes; build123d emits mm. Strip
+        # the unit suffix from the top-level width/height attributes.
+        svg = _re.sub(
+            r'(width|height)="([\d.]+)(mm|cm|in)"', r'\1="\2"', svg, count=2,
+        )
+        png_data = resvg_py.svg_to_bytes(
+            svg_string=svg, width=1200, background="#ffffff",
+        )
+        return bytes(png_data)
 
 
 def render_view(
@@ -718,29 +696,10 @@ def render_view(
     result: dict = {}
 
     # 2D path: shapes carry no solids (sketches, edges, dimensioned drawings
-    # built with build123d.drafting). Route to the 2D renderer/exporter
-    # instead of the 3D tessellation pipeline. Single named object that's a
-    # composed engineering drawing is the typical case.
-    #
-    # PNG rendering requires the cairo native library (via cairosvg). Fall
-    # back to SVG when cairo isn't available so the LLM still gets *something*
-    # to look at. Linux runners ship libcairo2; macOS / Windows users need
-    # to install it themselves (brew install cairo / GTK runtime).
+    # built with build123d.drafting) AND lie flat in Z. Route through the
+    # ExportSVG → resvg-py pipeline instead of VTK tessellation. resvg-py
+    # ships pre-built Rust wheels for all platforms — no native deps.
     if _shapes_are_2d(shapes):
-        if format in ("png", "both") and not _cairo_available():
-            # Promote requested PNG → SVG, with a warning so the caller knows
-            # what to install if they want raster.
-            format = "svg"
-            cairo_warning = (
-                "2D PNG rendering requires the cairo native library. "
-                "Returning SVG instead. Install cairo to enable PNG: "
-                "'brew install cairo' (macOS), 'apt-get install libcairo2' "
-                "(Debian/Ubuntu), or the GTK runtime on Windows."
-            )
-        else:
-            cairo_warning = None
-        if cairo_warning:
-            result.setdefault("label_warnings", []).append(cairo_warning)
         if highlights:
             result["label_warnings"] = [
                 "highlights are only supported for 3D shapes; ignored for 2D drawings."

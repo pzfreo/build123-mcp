@@ -530,43 +530,12 @@ show(drawing, 'top_view')
 """)
 
 
-def _has_cairo():
-    """Detect whether the cairo native library is available for 2D PNG rendering."""
-    try:
-        import cairosvg
-        cairosvg.svg2png(bytestring=b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')
-        return True
-    except Exception:
-        return False
-
-
-cairo_required = pytest.mark.skipif(
-    not _has_cairo(),
-    reason="cairo native library not available — install with 'brew install cairo' (macOS) or apt-get install libcairo2 (Linux)",
-)
-
-
-@cairo_required
 def test_render_view_2d_returns_png(session):
-    """A composed 2D drawing renders to a real PNG via the cairosvg path."""
+    """A composed 2D drawing renders to a real PNG via the resvg-py path."""
     _build_2d_drawing(session)
     out = render_view(session, objects="top_view", format="png")
     assert "png" in out
     assert out["png"][:8] == PNG_MAGIC
-
-
-def test_render_view_2d_falls_back_to_svg_without_cairo(session):
-    """Even without cairo, requesting PNG for a 2D drawing should not error
-    — it should fall back to SVG and surface a clear warning so the user
-    knows what to install. This test runs in both states (with and without
-    cairo) — when cairo is present, we still get PNG; when absent, SVG."""
-    _build_2d_drawing(session)
-    out = render_view(session, objects="top_view", format="png")
-    # Either PNG (cairo present) or SVG fallback (cairo absent) — never an error
-    assert "png" in out or "svg" in out
-    if "svg" in out and "png" not in out:
-        assert "label_warnings" in out
-        assert any("cairo" in w.lower() for w in out["label_warnings"])
 
 
 def test_render_view_2d_dxf_returns_dxf(session):
@@ -577,7 +546,6 @@ def test_render_view_2d_dxf_returns_dxf(session):
     assert b"SECTION" in out["dxf"]
 
 
-@cairo_required
 def test_render_view_2d_with_label_objects(session):
     """label_objects=True for a 2D drawing adds a label below the bbox."""
     _build_2d_drawing(session)
@@ -587,7 +555,6 @@ def test_render_view_2d_with_label_objects(session):
     assert len(labelled["png"]) > len(plain["png"])
 
 
-@cairo_required
 def test_render_view_2d_save_to_writes_png(session, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _build_2d_drawing(session)
