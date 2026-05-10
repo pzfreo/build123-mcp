@@ -678,6 +678,42 @@ def test_render_view_2d_colors_dims_layer(session):
     assert "rgb(0,100,0)" in text or "rgb(0, 100, 0)" in text
 
 
+# --- #92 F8: explicit mode= parameter + render_mode in result ---
+
+def test_render_view_mode_auto_detects_3d(session):
+    """mode='auto' (default) routes a 3D solid to the 3D pipeline."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    out = render_view(session, "iso", format="png")
+    assert out.get("render_mode") == "3d"
+
+
+def test_render_view_mode_auto_detects_2d(session):
+    """mode='auto' routes a flat 2D Compound to the 2D pipeline."""
+    _build_2d_drawing(session)
+    out = render_view(session, objects="top_view", format="png")
+    assert out.get("render_mode") == "2d"
+
+
+def test_render_view_mode_2d_forced_errors_on_3d(session):
+    """mode='2d' on a 3D solid raises a clear error."""
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="mode='2d'.*3D"):
+        render_view(session, "iso", format="png", mode="2d")
+
+
+def test_render_view_mode_3d_forced_errors_on_2d(session):
+    """mode='3d' on a flat 2D Compound raises a clear error."""
+    _build_2d_drawing(session)
+    with pytest.raises(ValueError, match="mode='3d'.*flat 2D"):
+        render_view(session, objects="top_view", format="png", mode="3d")
+
+
+def test_render_view_mode_invalid_raises(session):
+    execute_code(session, "result = Box(10, 10, 10)")
+    with pytest.raises(ValueError, match="Unknown mode"):
+        render_view(session, "iso", format="png", mode="banana")
+
+
 def test_render_view_2d_colors_unknown_name_falls_back_to_palette(session):
     """A colors dict that doesn't mention the object should fall back to
     the inline colour or palette — not crash."""

@@ -720,6 +720,7 @@ def render_view(
     label_objects: bool = False,
     highlights: list[dict] | None = None,
     colors: dict[str, str] | None = None,
+    mode: str = "auto",
 ) -> dict:
     """Render the active session geometry.
 
@@ -751,11 +752,35 @@ def render_view(
     tess = _QUALITY[quality]
     result: dict = {}
 
-    # 2D path: shapes carry no solids (sketches, edges, dimensioned drawings
-    # built with build123d.drafting) AND lie flat in Z. Route through the
-    # ExportSVG → resvg-py pipeline instead of VTK tessellation. resvg-py
-    # ships pre-built Rust wheels for all platforms — no native deps.
-    if _shapes_are_2d(shapes):
+    mode = mode.lower()
+    if mode not in ("auto", "2d", "3d"):
+        raise ValueError(f"Unknown mode '{mode}'. Use: auto, 2d, 3d")
+
+    # Decide which render path to use. "auto" applies the heuristic; "2d"/"3d"
+    # force a path and error if the shapes don't fit. result["render_mode"]
+    # always reports which path actually ran so the LLM can verify.
+    detected_2d = _shapes_are_2d(shapes)
+    if mode == "auto":
+        use_2d = detected_2d
+    elif mode == "2d":
+        if not detected_2d:
+            raise ValueError(
+                "mode='2d' was requested but at least one shape is 3D "
+                "(has solids or non-zero Z extent). Use mode='auto' or "
+                "mode='3d', or pass shapes built via build123d.drafting."
+            )
+        use_2d = True
+    else:  # mode == "3d"
+        if detected_2d:
+            raise ValueError(
+                "mode='3d' was requested but every shape is flat 2D "
+                "(no solids, zero Z extent). Use mode='auto' or "
+                "mode='2d', or pass an actual 3D shape."
+            )
+        use_2d = False
+
+    if use_2d:
+        result["render_mode"] = "2d"
         if highlights:
             result["label_warnings"] = [
                 "highlights are only supported for 3D shapes; ignored for 2D drawings."
@@ -837,6 +862,8 @@ def render_view(
                     # tempfile copy.
                     result[f"{key}_path"] = abs_path
         return result
+
+    result["render_mode"] = "3d"
 
     # Resolve labels up-front so validation errors surface before any rendering work.
     labels: list[tuple[tuple[float, float, float], str]] = []

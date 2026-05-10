@@ -269,6 +269,7 @@ class WorkerSession:
         label_objects: bool = False,
         highlights: list[dict] | None = None,
         colors: dict[str, str] | None = None,
+        mode: str = "auto",
     ) -> dict:
         return self._call(
             "render_view",
@@ -285,6 +286,7 @@ class WorkerSession:
                 "label_objects": label_objects,
                 "highlights": highlights,
                 "colors": colors,
+                "mode": mode,
             },
             self._RENDER_TIMEOUT,
         )
