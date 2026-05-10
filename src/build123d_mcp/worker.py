@@ -268,6 +268,7 @@ class WorkerSession:
         format: str = "png",
         label_objects: bool = False,
         highlights: list[dict] | None = None,
+        colors: dict[str, str] | None = None,
     ) -> dict:
         return self._call(
             "render_view",
@@ -283,6 +284,7 @@ class WorkerSession:
                 "format": format,
                 "label_objects": label_objects,
                 "highlights": highlights,
+                "colors": colors,
             },
             self._RENDER_TIMEOUT,
         )

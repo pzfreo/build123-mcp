@@ -546,7 +546,45 @@ def _shapes_are_2d(shapes) -> bool:
     return True
 
 
-def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
+def _resolve_2d_colors(shapes, colors: dict | None):
+    """Build the per-name colour lookup for the 2D path.
+
+    Resolution priority for an object's part colour:
+        colors[name]  >  name:color from objects=  >  shared palette
+    Special layer keys:
+        colors["_dims"]   — dimensions/annotations colour (default dark blue)
+        colors["_labels"] — object label colour (default = dims colour)
+    Returns (part_color_for_index_fn, dim_color, label_color).
+    """
+    from build123d import Color
+
+    colors = colors or {}
+
+    def _to_color(token: str, fallback: "Color") -> "Color":
+        try:
+            return Color(*_color_to_rgb(token))
+        except Exception:
+            return fallback
+
+    default_dim = Color(0, 0.2, 0.7)
+    dim_color = _to_color(colors["_dims"], default_dim) if "_dims" in colors else default_dim
+    label_color = (
+        _to_color(colors["_labels"], dim_color) if "_labels" in colors else dim_color
+    )
+
+    def part_color_for(name: str | None, supplied: str | None, index: int) -> "Color":
+        if name and colors.get(name):
+            token = colors[name]
+        elif supplied:
+            token = supplied
+        else:
+            token = _PALETTE[index % len(_PALETTE)]
+        return _to_color(token, Color(0, 0, 0))
+
+    return part_color_for, dim_color, label_color
+
+
+def _do_render_png_2d(shapes, label_objects: bool = False, colors: dict | None = None) -> bytes:
     """Rasterise a 2D dimensioned drawing to PNG via build123d ExportSVG +
     resvg-py.
 
@@ -576,8 +614,7 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
     import resvg_py
     from build123d import Color, Compound, ExportSVG, Text
 
-    part_color = Color(0, 0, 0)
-    dim_color = Color(0, 0.2, 0.7)
+    part_color_for, dim_color, label_color = _resolve_2d_colors(shapes, colors)
 
     # Augment shapes with label Text if requested.
     label_shapes = []
@@ -596,19 +633,10 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
             except Exception:
                 continue
 
-    def _resolve_part_color(supplied: str | None, index: int) -> "Color":
-        """Honour user-supplied colour for a named object, else cycle the
-        shared palette so multi-object drawings get distinct hues by default."""
-        token = supplied if supplied else _PALETTE[index % len(_PALETTE)]
-        try:
-            return Color(*_color_to_rgb(token))
-        except Exception:
-            return part_color
-
     exporter = ExportSVG(margin=10)
     if len(shapes) == 1:
         name, shape, obj_color = shapes[0]
-        single_part_color = _resolve_part_color(obj_color, 0) if obj_color else part_color
+        single_part_color = part_color_for(name, obj_color, 0)
         # Per-object part colour, shared blue for dimensions/annotations
         exporter.add_layer("part", line_color=single_part_color, line_weight=0.5)
         exporter.add_layer(
@@ -633,7 +661,7 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
         # against any part colour.
         for i, (name, shape, obj_color) in enumerate(shapes):
             base = name if name and name != "shape" else f"shape_{i}"
-            obj_part_color = _resolve_part_color(obj_color, i)
+            obj_part_color = part_color_for(name, obj_color, i)
             part_layer = f"{base}_part"
             dims_layer = f"{base}_dims"
             exporter.add_layer(part_layer, line_color=obj_part_color, line_weight=0.5)
@@ -654,7 +682,7 @@ def _do_render_png_2d(shapes, label_objects: bool = False) -> bytes:
 
     if label_shapes:
         exporter.add_layer(
-            "_labels", line_color=dim_color, fill_color=dim_color, line_weight=0.05,
+            "_labels", line_color=label_color, fill_color=label_color, line_weight=0.05,
         )
         for txt in label_shapes:
             try:
@@ -691,6 +719,7 @@ def render_view(
     format: str = "png",
     label_objects: bool = False,
     highlights: list[dict] | None = None,
+    colors: dict[str, str] | None = None,
 ) -> dict:
     """Render the active session geometry.
 
@@ -733,24 +762,22 @@ def render_view(
             ]
         if format in ("png", "both"):
             try:
-                result["png"] = _do_render_png_2d(shapes, label_objects=label_objects)
+                result["png"] = _do_render_png_2d(
+                    shapes, label_objects=label_objects, colors=colors,
+                )
             except Exception as exc:
                 result["png_error"] = f"{type(exc).__name__}: {exc}"
         if format in ("svg", "both"):
             # 2D Sketches → SVG via ExportSVG with per-object colour and
             # part/dims layer split (mirrors the PNG path).
-            from build123d import Color, ExportSVG
+            from build123d import ExportSVG
             import tempfile as _tempfile
-            dim_col = Color(0, 0.2, 0.7)
+            part_color_for, dim_col, _label_col = _resolve_2d_colors(shapes, colors)
             with _tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
                 svg_exporter = ExportSVG(margin=5)
                 for i, (name, shape, obj_color) in enumerate(shapes):
                     base = name if name and name != "shape" else f"shape_{i}"
-                    token = obj_color if obj_color else _PALETTE[i % len(_PALETTE)]
-                    try:
-                        part_col = Color(*_color_to_rgb(token))
-                    except Exception:
-                        part_col = Color(0, 0, 0)
+                    part_col = part_color_for(name, obj_color, i)
                     part_layer = f"{base}_part"
                     dims_layer = f"{base}_dims"
                     svg_exporter.add_layer(part_layer, line_color=part_col, line_weight=0.4)
