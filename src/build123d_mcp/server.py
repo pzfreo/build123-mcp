@@ -45,16 +45,18 @@ def render_view(direction: str = "iso", objects: str = "", quality: str = "stand
             f.write(result[key])
         return p
 
-    for key, suffix, mime in (("png", ".png", "image/png"), ("svg", ".svg", "image/svg+xml")):
-        if key in result:
-            data = result[key]
-            path = _path_for(key, suffix)
-            contents.append(ImageContent(
-                type="image",
-                data=base64.b64encode(data).decode(),
-                mimeType=mime,
-            ))
-            contents.append(TextContent(type="text", text=f"[SEND: {path}]"))
+    if "png" in result:
+        path = _path_for("png", ".png")
+        contents.append(ImageContent(
+            type="image",
+            data=base64.b64encode(result["png"]).decode(),
+            mimeType="image/png",
+        ))
+        contents.append(TextContent(type="text", text=f"[SEND: {path}]"))
+
+    if "svg" in result:
+        path = _path_for("svg", ".svg")
+        contents.append(TextContent(type="text", text=f"[SEND: {path}]"))
 
     # DXF is a CAD interchange format, not an image — emit only the file marker
     # so clients deliver the file without the ImageContent base64 round-trip.
