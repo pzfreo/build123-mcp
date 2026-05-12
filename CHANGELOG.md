@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.19
+
+Two bug fixes.
+
+### Bug fixes
+
+- **SVG renders no longer break the Claude API session** (#101): SVG output was returned as `ImageContent(mimeType="image/svg+xml")`, which the Claude API rejects with `400 Could not process image`. Once this content landed in conversation history every subsequent message — including simple greetings — failed with the same error, making the session unusable. SVGs are now delivered only via the `[SEND: path]` file marker, matching how DXF output was already handled.
+- **Library index rescans correctly after partial indexing** (#100): `_LibraryIndex._last_scan` now tracks the maximum mtime of actually-indexed files rather than `time.time()` at scan completion. Previously, any file written between scan-start and scan-end could be missed on the next incremental scan.
+
+---
+
 ## v0.3.18
 
 This release lands the **`build123d://presentation` cookbook** for design-discussion diagrams plus four follow-up improvements driven by feedback from a real LLM-driven drafting session (#92). The 2D drawing workflow is now substantially more usable for presentation-quality output.
