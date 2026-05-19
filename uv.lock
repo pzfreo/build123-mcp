@@ -98,6 +98,14 @@ wheels = [
 ]
 
 [[package]]
+name = "build123d-drafting"
+version = "0.1.0"
+source = { git = "https://github.com/pzfreo/build123d-drafting-helpers.git#fb2e203ef3c91ef241bb026d739ec3c067b5f4a6" }
+dependencies = [
+    { name = "build123d" },
+]
+
+[[package]]
 name = "build123d-mcp"
 version = "0.3.20.dev0"
 source = { editable = "." }
@@ -110,6 +118,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "build123d-drafting" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -126,6 +135,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "build123d-drafting", git = "https://github.com/pzfreo/build123d-drafting-helpers.git" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov", specifier = ">=7.1.0" },

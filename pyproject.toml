@@ -49,7 +49,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-build123d-drafting = { path = "../build123d-drafting-helpers", editable = true }
+build123d-drafting = { git = "https://github.com/pzfreo/build123d-drafting-helpers.git" }
 
 [tool.mypy]
 files = ["src"]
