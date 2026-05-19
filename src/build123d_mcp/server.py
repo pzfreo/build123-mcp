@@ -138,8 +138,7 @@ def inspect_drawing(objects: str = "") -> str:
 
     objects: comma-separated object names (default: all registered objects).
     """
-    from build123d_mcp.tools.inspect_drawing import inspect_drawing as _inspect
-    return _inspect(_session, objects)
+    return _session.inspect_drawing(objects)
 
 
 @mcp.tool()
