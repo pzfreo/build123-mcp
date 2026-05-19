@@ -376,6 +376,71 @@ show(result, "clean_svg_demo")""",
 # - PNG (render_view): for the LLM's own 'eyeball it' check. Don't use for
 #   handoff — projection is rasterised and lossy."""
     ),
+    Section(
+        text="""\
+## Drafting conventions — failure modes and their fixes
+##
+## These are the recurring pathologies that hit empirically when writing
+## drafting code with raw build123d. Each one has a short rule that
+## prevents the failure; the structural-lint tool catches them after the
+## fact.
+##
+## 1. ExtensionLine.offset sign convention
+##
+## ExtensionLine(border=[a, b], offset=d, ...) places the dim on the
+## right-hand normal of the path direction a→b. Right-hand normal of
+## (dx, dy) is (dy, -dx). Reverse the points or flip the offset sign to
+## put the dim on the other side. The build123d-drafting helper
+## dim_linear() removes this guessing entirely — it takes
+## side="above"/"below"/"left"/"right" and computes the sign internally.
+##
+## 2. DimensionLine crashes when label is wider than the path
+##
+## With a path shorter than the label string's pixel width and a path
+## also too short for the outside-arrows fallback, build123d raises
+## ValueError: "Can't get geom adaptor of empty wire". Either widen the
+## path, shorten the label, or use build123d-drafting.safe_dim_line()
+## which retries with a truncated label rather than raising.
+##
+## 3. Text on a layer with fill_color=None renders as outlines
+##
+## When ExportSVG writes a layer that has only line_color set (no
+## fill_color), every <text> element on that layer renders as
+## thick-stroke outlines instead of filled glyphs. Set
+## fill_color = line_color on dimension layers (the cookbook's
+## "clean SVG export" recipe shows this) — the closed-rect witness ticks
+## and the text glyphs then both render solid. The lint_drawing tool
+## flags this in SVG mode.
+##
+## 4. Leader lines need a gap before the label
+##
+## A leader line that runs straight up to the label's bounding box
+## visually strikes through the first character. Stop the line ~1 mm
+## before the label or insert a horizontal shelf segment.
+## build123d-drafting.leader() handles this automatically; the lint
+## tool's leader_elbow_in_label check catches it after the fact.
+##
+## 5. View-axis swap in non-top projections
+##
+## project_to_viewport(camera, up, look_at) projects world XYZ onto
+## page XY; for a bottom view (camera at -Z), world-X flips to negative
+## page-X. Any dimensions or labels you compose by hand using world
+## coordinates will be mirrored. Call view_axes(camera, up, look_at)
+## before projecting to see the mapping explicitly:
+##
+##     view_axes(viewport_origin=(0, 0, -100))
+##     # {"world_X": ["page_X", -1.0], "world_Y": ["page_Y", 1.0], ...}
+##
+## ## Tooling that catches each of these
+##
+## - inspect_drawing()                — bbox + annotation metadata
+## - lint_drawing()                   — items 1, 3, 4 above
+## - view_axes()                      — item 5 above
+## - render_drawing(svg_path=...)     — visual check after lint
+##
+## Use the LLM workflow:
+##   build → inspect_drawing() → lint_drawing() → fix → render_drawing()"""
+    ),
 ]
 
 

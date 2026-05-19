@@ -1,5 +1,8 @@
 """inspect_drawing — structured bbox/annotation report for a 2D drawing session."""
 import json
+import os
+import re
+import xml.etree.ElementTree as ET
 
 
 def _bbox_dict(shape) -> dict | None:
@@ -17,7 +20,72 @@ def _bbox_dict(shape) -> dict | None:
         return None
 
 
-def inspect_drawing(session, objects: str = "") -> str:
+_SVG_NS = "{http://www.w3.org/2000/svg}"
+
+
+def _inspect_svg(svg_path: str) -> str:
+    """SVG-file mode: parse an SVG and report page bbox, layer ids,
+    text contents, and basic structural counts.
+
+    Decouples inspection from the session-registration ceremony, so SVGs
+    written by any code path (CI artifacts, third-party exports, prior
+    runs) can be inspected.
+    """
+    if not os.path.isfile(svg_path):
+        return json.dumps({"error": f"SVG file not found: {svg_path}"})
+    try:
+        tree = ET.parse(svg_path)
+    except ET.ParseError as e:
+        return json.dumps({"error": f"SVG parse error: {e}"})
+
+    root = tree.getroot()
+
+    def _strip_unit(val: str | None) -> float | None:
+        if not val:
+            return None
+        m = re.match(r"([\d.\-eE]+)", val)
+        return float(m.group(1)) if m else None
+
+    page = {
+        "width": _strip_unit(root.get("width")),
+        "height": _strip_unit(root.get("height")),
+        "viewBox": root.get("viewBox"),
+    }
+
+    layers: list[dict] = []
+    text_entries: list[dict] = []
+    counts = {"path": 0, "line": 0, "polyline": 0, "polygon": 0, "rect": 0, "circle": 0, "g": 0, "text": 0}
+
+    for elem in root.iter():
+        tag = elem.tag.replace(_SVG_NS, "")
+        if tag in counts:
+            counts[tag] += 1
+        if tag == "g":
+            layers.append({
+                "id": elem.get("id"),
+                "transform": elem.get("transform"),
+                "fill": elem.get("fill"),
+            })
+        elif tag == "text":
+            text_entries.append({
+                "id": elem.get("id"),
+                "x": _strip_unit(elem.get("x")),
+                "y": _strip_unit(elem.get("y")),
+                "text": "".join(elem.itertext()).strip(),
+                "fill": elem.get("fill"),
+            })
+
+    return json.dumps({
+        "mode": "svg",
+        "path": svg_path,
+        "page": page,
+        "layers": layers,
+        "text": text_entries,
+        "counts": counts,
+    }, indent=2)
+
+
+def inspect_drawing(session, objects: str = "", svg_path: str = "") -> str:
     """Return a JSON report with bounding boxes and annotation metadata.
 
     For each named object in the session, reports its page-space bounding box,
@@ -27,15 +95,18 @@ def inspect_drawing(session, objects: str = "") -> str:
 
     Args:
         objects: comma-separated object names to inspect. Empty = all objects.
+        svg_path: if given, inspect an SVG file from disk instead of the
+            session. Reports page size, layer ids, text content + positions,
+            and element counts. Useful for SVGs produced outside the sandbox
+            (CI artifacts, third-party exports).
 
     Returns:
-        JSON string. Top-level keys:
-          objects    — dict keyed by name; each entry has bbox, faces, edges,
-                       and annotation (null if not recorded via annotate()).
-          drawing_bbox — bounding box enclosing all inspected objects.
-          lint       — list of structural warnings (same checks as
-                       build123d_drafting.lint_drawing).
+        JSON string. Session mode has keys: objects, drawing_bbox, lint.
+        SVG mode has keys: mode, path, page, layers, text, counts.
     """
+    if svg_path:
+        return _inspect_svg(svg_path)
+
     if objects:
         names = [n.strip() for n in objects.split(",") if n.strip()]
         missing = [n for n in names if n not in session.objects]

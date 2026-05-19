@@ -153,7 +153,27 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
 
     if op == "inspect_drawing":
         from build123d_mcp.tools.inspect_drawing import inspect_drawing
-        return inspect_drawing(session, args.get("objects", ""))
+        return inspect_drawing(session, args.get("objects", ""), args.get("svg_path", ""))
+
+    if op == "view_axes":
+        from build123d_mcp.tools.view_axes import view_axes
+        return view_axes(
+            tuple(args["viewport_origin"]),
+            tuple(args.get("viewport_up", (0.0, 1.0, 0.0))),
+            tuple(args.get("look_at", (0.0, 0.0, 0.0))),
+        )
+
+    if op == "lint_drawing":
+        from build123d_mcp.tools.lint_drawing import lint_drawing
+        return lint_drawing(session, args.get("svg_path", ""))
+
+    if op == "render_drawing":
+        from build123d_mcp.tools.render_drawing import render_drawing
+        return render_drawing(
+            args["svg_path"],
+            args.get("width", 0),
+            args.get("save_to", ""),
+        )
 
     raise ValueError(f"Unknown operation: '{op}'")
 
@@ -355,8 +375,34 @@ class WorkerSession:
     def import_cad_file(self, path: str, name: str = "") -> str:
         return self._call("import_cad_file", {"path": path, "name": name}, self._EXPORT_TIMEOUT)
 
-    def inspect_drawing(self, objects: str = "") -> str:
-        return self._call("inspect_drawing", {"objects": objects}, self._SHORT_TIMEOUT)
+    def inspect_drawing(self, objects: str = "", svg_path: str = "") -> str:
+        return self._call(
+            "inspect_drawing",
+            {"objects": objects, "svg_path": svg_path},
+            self._SHORT_TIMEOUT,
+        )
+
+    def view_axes(
+        self,
+        viewport_origin: tuple,
+        viewport_up: tuple = (0.0, 1.0, 0.0),
+        look_at: tuple = (0.0, 0.0, 0.0),
+    ) -> str:
+        return self._call(
+            "view_axes",
+            {"viewport_origin": viewport_origin, "viewport_up": viewport_up, "look_at": look_at},
+            self._SHORT_TIMEOUT,
+        )
+
+    def lint_drawing(self, svg_path: str = "") -> str:
+        return self._call("lint_drawing", {"svg_path": svg_path}, self._SHORT_TIMEOUT)
+
+    def render_drawing(self, svg_path: str, width: int = 0, save_to: str = "") -> dict:
+        return self._call(
+            "render_drawing",
+            {"svg_path": svg_path, "width": width, "save_to": save_to},
+            self._RENDER_TIMEOUT,
+        )
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)

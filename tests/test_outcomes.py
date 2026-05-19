@@ -557,7 +557,8 @@ def test_mcp_lists_all_tools():
                      "save_snapshot", "restore_snapshot", "diff_snapshot", "interference",
                      "search_library", "load_part", "workflow_hints", "session_state", "health_check",
                      "version", "last_error", "shape_compare", "repair_hints",
-                     "import_cad_file", "cross_sections", "clearance", "inspect_drawing"}
+                     "import_cad_file", "cross_sections", "clearance", "inspect_drawing",
+                     "view_axes", "lint_drawing", "render_drawing"}
 
 
 @_skip_mcp_on_win
