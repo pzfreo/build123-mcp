@@ -111,7 +111,7 @@ wheels = [
 
 [[package]]
 name = "build123d-mcp"
-version = "0.3.23.dev0"
+version = "0.3.24.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "bd-warehouse" },
