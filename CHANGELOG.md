@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.3.21
+
+Drawing-side fixes and feature landing. The four issues raised against 0.3.20 are all addressed, plus the helper library is now a proper PyPI dependency rather than a git-URL dev pin.
+
+### Bug fixes
+
+- **`inspect_drawing` no longer crashes with `'WorkerSession' object has no attribute 'objects'`** (#105 → #109). The tool was being called with the parent-side IPC proxy as if it were the in-process `Session`. Routed it through `worker._dispatch` like every other tool. Regression test goes through `WorkerSession`, not bare `Session`, so this class of routing bug can't recur silently.
+- **`from build123d_drafting import …` works out of the box** (#106 → #110). The helper library was on the import allowlist but not actually installed at runtime — its `inspect_drawing` docstring and the drafting cookbook both promised a workflow users couldn't run. Now bundled as a runtime dependency (`build123d-drafting-helpers>=0.1.0`, published to PyPI). Install name and import name deliberately differ; existing call sites keep working unchanged. Regression test reads installed-package metadata so a future move back to dev-only fails the suite.
+- **`annotate()` accepts vanilla `build123d.ExtensionLine` / `DimensionLine`** (#107 → #111). The previous attribute-lookup list (`label_str`, `measured_length`, `tip`, `elbow`) matched the helper-library result types only, so existing drafting codebases using upstream primitives got empty metadata blocks. Now reads `.dimension` (set by build123d itself) for measured_length, and accepts an explicit `label="…"` kwarg — build123d does **not** store the constructor label anywhere on the shape after `__init__`, so this is the honest mechanism. Helper-library flows are unchanged.
+
+### Features
+
+- **Drawing-side MCP tooling** (#108 → #112). Four new tools closing the build → review → fix loop for 2D drawings the same way 3D parts already work:
+  - **`render_drawing(svg_path, width=1200, save_to=…)`** — rasterise an SVG file written outside the sandbox (e.g. by a short script that did the `ExportSVG` call directly). The PNG is returned inline so the LLM can see the drawing without you opening it in another tool. Uses the existing `resvg-py` runtime dep.
+  - **`inspect_drawing(svg_path=…)` mode** — parse an SVG and report page size, layer ids, text content + positions, and element counts. Decouples inspection from the build-and-register ceremony; works on SVGs from any source.
+  - **`lint_drawing(svg_path="")`** — standalone tool extracting the inline lint from `inspect_drawing` and adding an SVG-mode check for `<text>` elements without `fill` (the single most common SVG drafting bug — glyphs render as illegible thick outlines).
+  - **`view_axes(viewport_origin, viewport_up, look_at)`** — analytic world→page axis mapping for a `project_to_viewport` call. Use BEFORE rendering to catch bottom-view / side-view axis swaps before they show up in the output. Wraps the helper library's existing `view_axes` function.
+- **`build123d://drafting` cookbook gains a Drafting conventions section** (#108 → #112). Five recurring failure modes (offset-sign convention, label-too-long crash, text-without-fill, leader-needs-gap, view-axis swap) each paired with the helper or lint tool that catches them.
+
+### Dependency change
+
+- **`build123d-drafting-helpers>=0.1.0`** added as a runtime dependency (was a dev-only git-URL pin previously). Package install name is `build123d-drafting-helpers`; import name stays `build123d_drafting`. The dev-only pin and the `[tool.uv.sources]` git pointer are removed — the helper resolves from PyPI normally now.
+
+---
+
 ## v0.3.20
 
 Drawing annotation tooling: a companion helper library, an inspection tool, and sandbox access for drawing scripts.
