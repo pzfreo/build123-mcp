@@ -18,21 +18,17 @@ import re
 import xml.etree.ElementTree as ET
 
 
-def _lint_session(session) -> list[dict]:
-    """Run structural lint on session-registered annotations.
+def _lint_annotations(annotations: dict, objects: dict | None = None) -> list[dict]:
+    """Run label-vs-measured and leader checks against an annotations dict.
 
-    Mirrors the inline checks in inspect_drawing but returns structured dicts
-    instead of strings so callers can filter/sort programmatically.
+    Args:
+        annotations: mapping of name → annotation metadata dict.
+        objects: optional session.objects for leader elbow bbox check (unavailable
+            in SVG mode — the geometry isn't loaded).
     """
     violations: list[dict] = []
-    objects = session.objects
-    annotations = session.drawing_annotations
 
-    for name in objects:
-        ann = annotations.get(name)
-        if ann is None:
-            continue
-
+    for name, ann in annotations.items():
         label = ann.get("label_str", "")
         measured = ann.get("measured_length")
         if label and measured and measured > 1e-6:
@@ -59,7 +55,7 @@ def _lint_session(session) -> list[dict]:
                     pass
 
         elbow = ann.get("elbow")
-        if elbow:
+        if elbow and objects is not None and name in objects:
             try:
                 bb = objects[name].bounding_box()
                 if (bb.min.X <= elbow[0] <= bb.max.X
@@ -79,17 +75,24 @@ def _lint_session(session) -> list[dict]:
     return violations
 
 
+def _lint_session(session) -> list[dict]:
+    """Run structural lint on session-registered annotations."""
+    return _lint_annotations(session.drawing_annotations, objects=session.objects)
+
+
 _SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
 def _lint_svg(svg_path: str) -> list[dict]:
-    """Layer-level checks on an SVG file.
+    """Layer-level checks on an SVG file, plus sidecar annotation checks.
 
     Catches:
     - text elements on a group with fill='none' or no fill attribute, which
-      renders glyphs as outlines rather than filled shapes (the single most
-      common SVG drafting bug).
+      renders glyphs as outlines rather than filled shapes.
+    - label-vs-measured divergence from the .dims.json sidecar (written by
+      save_drawing_annotations()) — same axis-swap check as session mode.
     """
+    import os, json as _json
     violations: list[dict] = []
     try:
         tree = ET.parse(svg_path)
@@ -101,7 +104,6 @@ def _lint_svg(svg_path: str) -> list[dict]:
 
     def walk(elem, inherited_fill):
         fill = elem.get("fill", inherited_fill)
-        # Also check style="fill:..."
         style = elem.get("style", "")
         m = re.search(r"fill:\s*([^;]+)", style)
         if m:
@@ -126,6 +128,22 @@ def _lint_svg(svg_path: str) -> list[dict]:
             walk(child, fill)
 
     walk(root, None)
+
+    # Sidecar annotation checks (label-vs-measured, leader-strikethrough).
+    sidecar = os.path.splitext(svg_path)[0] + ".dims.json"
+    if os.path.isfile(sidecar):
+        try:
+            with open(sidecar) as f:
+                annotations = _json.load(f)
+            violations.extend(_lint_annotations(annotations, objects=None))
+        except Exception as exc:
+            violations.append({
+                "severity": "warning",
+                "check": "sidecar_read",
+                "object": sidecar,
+                "message": f"Could not read sidecar: {exc}",
+            })
+
     return violations
 
 

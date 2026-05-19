@@ -219,3 +219,47 @@ class TestDrawingToolsViaWorker:
             assert result["png"][:8] == b"\x89PNG\r\n\x1a\n"
         finally:
             ws._kill_worker()
+
+
+# ---------------------------------------------------------------------------
+# lint_drawing SVG mode — sidecar annotation checks (#118)
+# ---------------------------------------------------------------------------
+
+class TestLintDrawingSvgSidecar:
+    def _write_svg(self, path):
+        path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"/>')
+
+    def test_sidecar_label_mismatch_flagged(self, tmp_path):
+        from build123d_mcp.tools.lint_drawing import lint_drawing
+        import json as _json
+        svg = tmp_path / "drawing.svg"
+        self._write_svg(svg)
+        sidecar = tmp_path / "drawing.dims.json"
+        # 30 mm path labelled "99" — clear axis-swap mismatch
+        sidecar.write_text(_json.dumps({
+            "axis_swap_bug": {"type": "ExtensionLine", "label_str": "99", "measured_length": 30.0}
+        }))
+        out = json.loads(lint_drawing(None, str(svg)))
+        assert any(v["check"] == "label_vs_measured" for v in out["violations"])
+        assert any("99" in v["message"] for v in out["violations"])
+
+    def test_sidecar_correct_label_no_violation(self, tmp_path):
+        from build123d_mcp.tools.lint_drawing import lint_drawing
+        import json as _json
+        svg = tmp_path / "drawing.svg"
+        self._write_svg(svg)
+        sidecar = tmp_path / "drawing.dims.json"
+        sidecar.write_text(_json.dumps({
+            "width": {"type": "ExtensionLine", "label_str": "20", "measured_length": 20.0}
+        }))
+        out = json.loads(lint_drawing(None, str(svg)))
+        label_violations = [v for v in out["violations"] if v["check"] == "label_vs_measured"]
+        assert label_violations == []
+
+    def test_no_sidecar_no_annotation_violations(self, tmp_path):
+        from build123d_mcp.tools.lint_drawing import lint_drawing
+        svg = tmp_path / "drawing.svg"
+        self._write_svg(svg)
+        out = json.loads(lint_drawing(None, str(svg)))
+        annotation_violations = [v for v in out["violations"] if v["check"] == "label_vs_measured"]
+        assert annotation_violations == []

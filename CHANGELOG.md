@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.23
+
+- **`lint_drawing(svg_path=…)` now uses the sidecar** (#118): when a `.dims.json` sidecar exists alongside the SVG (written by `save_drawing_annotations()`), the label-vs-measured and leader checks run against the sidecar annotations — the same axis-swap detection as session mode. Makes `save_drawing_annotations` + `lint_drawing(svg_path=…)` a complete out-of-band lint flow usable from CI without a live session.
+
+---
+
 ## v0.3.22
 
 Bug fixes and tooling improvements for the drawing workflow.
