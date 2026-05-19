@@ -114,6 +114,35 @@ def interference(object_a: str, object_b: str) -> str:
 
 
 @mcp.tool()
+def inspect_drawing(objects: str = "") -> str:
+    """Structured bbox and annotation report for a 2D drawing session.
+
+    Returns JSON with per-object bounding boxes (page-space coordinates), face/edge
+    counts, and — for objects registered via annotate() using build123d_drafting helpers
+    — the stored label string, measured path length, and leader tip/elbow coordinates.
+    Also runs structural lint checks: label-vs-measured-length divergence >0.5% and
+    leader-elbow-inside-label-bbox.
+
+    Use this to verify drawings numerically without rendering:
+    - Confirm a dim labelled "40" actually spans ~40 mm on the page.
+    - Check that leaders are positioned cleanly (elbow outside the label).
+    - Get the full drawing extent to plan view placement.
+
+    Use annotate(result, name) instead of show(result.shape, name) when building with
+    build123d_drafting so that metadata (label, length, tip, elbow) is stored:
+
+        from build123d_drafting import dim_linear, Draft
+        draft = Draft(font_size=2.5, decimal_precision=1)
+        w = dim_linear((-20, -10, 0), (20, -10, 0), "below", 8, draft, label="40")
+        annotate(w, "width_dim")   # stores metadata AND registers for render_view
+
+    objects: comma-separated object names (default: all registered objects).
+    """
+    from build123d_mcp.tools.inspect_drawing import inspect_drawing as _inspect
+    return _inspect(_session, objects)
+
+
+@mcp.tool()
 def search_library(query: str = "") -> str:
     """Search the part library. query: keywords matched against name, description, tags, category (empty returns all). Returns name, category, description, tags, and full parameter specs including types, defaults, and descriptions."""
     if not _has_library:

@@ -45,7 +45,11 @@ dev = [
     "pytest-timeout",
     "mypy",
     "pytest-cov>=7.1.0",
+    "build123d-drafting>=0.1.0",
 ]
+
+[tool.uv.sources]
+build123d-drafting = { path = "../build123d-drafting-helpers", editable = true }
 
 [tool.mypy]
 files = ["src"]

@@ -13,7 +13,7 @@ from build123d_mcp.security import (
 
 
 # Names injected by the session itself — excluded from rollback and new-key detection.
-_INJECTED = frozenset({"__builtins__", "show", "named_face"})
+_INJECTED = frozenset({"__builtins__", "show", "named_face", "annotate"})
 
 
 class Session:
@@ -24,6 +24,7 @@ class Session:
         self.objects: dict[str, Any] = {}
         self.snapshots: dict[str, Any] = {}
         self.last_error_detail: dict[str, Any] | None = None
+        self.drawing_annotations: dict[str, Any] = {}
         self._inject_builtins()
 
     def _inject_builtins(self) -> None:
@@ -31,6 +32,28 @@ class Session:
         objects = self.objects
 
         session_ref = self
+        drawing_annotations = self.drawing_annotations
+
+        def annotate(result: Any, name: str | None = None) -> None:
+            """Register a build123d_drafting DimResult/LeaderResult for inspect_drawing.
+
+            Stores annotation metadata (label, measured length, tip/elbow coords)
+            and also calls show() so the shape is visible to render_view.
+            """
+            if name is None:
+                name = getattr(result, "label_str", None) or "annotation"
+            meta: dict[str, Any] = {"type": type(result).__name__}
+            for attr in ("label_str", "measured_length", "tip", "elbow"):
+                val = getattr(result, attr, None)
+                if val is not None:
+                    meta[attr] = val
+            drawing_annotations[name] = meta
+            shape = getattr(result, "shape", result)
+            objects[name] = shape
+            session_ref.current_shape = shape
+            print(f"Annotated '{name}': {meta.get('label_str', '')}")
+
+        session_ref.namespace["annotate"] = annotate
 
         def show(shape: Any, name: str | None = None) -> None:
             if name is None:
@@ -171,6 +194,7 @@ class Session:
         }
         shape_before = self.current_shape
         objects_before = dict(self.objects)
+        annotations_before = dict(self.drawing_annotations)
 
         buf = io.StringIO()
         exc: Exception | None = None
@@ -202,6 +226,8 @@ class Session:
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
+            self.drawing_annotations.clear()
+            self.drawing_annotations.update(annotations_before)
             self.last_error_detail = {"type": "ExecutionTimeout", "message": str(e), "line": None, "excerpt": None}
             return f"Error: ExecutionTimeout: {e}"
         except AssertionError as e:
@@ -209,6 +235,8 @@ class Session:
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
+            self.drawing_annotations.clear()
+            self.drawing_annotations.update(annotations_before)
             msg = str(e) or "Constraint failed"
             self.last_error_detail = {"type": "AssertionError", "message": msg, "line": None, "excerpt": None}
             return f"Constraint failed: {e}" if str(e) else "Constraint failed"
@@ -224,6 +252,8 @@ class Session:
             self.current_shape = shape_before
             self.objects.clear()
             self.objects.update(objects_before)
+            self.drawing_annotations.clear()
+            self.drawing_annotations.update(annotations_before)
             self.last_error_detail = self._make_error_detail(exc, code)
             return f"Error: {type(exc).__name__}: {exc}"
 
@@ -331,5 +361,6 @@ class Session:
         self.current_shape = None
         self.objects.clear()
         self.snapshots.clear()
+        self.drawing_annotations.clear()
         self.last_error_detail = None
         self._inject_builtins()
