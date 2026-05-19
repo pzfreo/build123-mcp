@@ -30,6 +30,7 @@ IMPORT_ALLOWLIST = frozenset({
     # CAD libraries
     "build123d",
     "bd_warehouse",
+    "build123d_drafting",
     # Numeric / math
     "math",
     "numpy",
@@ -158,6 +159,7 @@ EXTRA_ALLOWED_IMPORTS: set[str] = set()
 
 def _is_root_allowed(root: str) -> bool:
     return root in IMPORT_ALLOWLIST or root in EXTRA_ALLOWED_IMPORTS
+
 
 # Builtins that are dangerous even without an import.
 _BLOCKED_BUILTINS = frozenset({
