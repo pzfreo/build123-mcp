@@ -114,31 +114,119 @@ def interference(object_a: str, object_b: str) -> str:
 
 
 @mcp.tool()
-def inspect_drawing(objects: str = "") -> str:
-    """Structured bbox and annotation report for a 2D drawing session.
+def inspect_drawing(objects: str = "", svg_path: str = "") -> str:
+    """Structured bbox and annotation report for a 2D drawing.
 
-    Returns JSON with per-object bounding boxes (page-space coordinates), face/edge
-    counts, and — for objects registered via annotate() using build123d_drafting helpers
-    — the stored label string, measured path length, and leader tip/elbow coordinates.
-    Also runs structural lint checks: label-vs-measured-length divergence >0.5% and
-    leader-elbow-inside-label-bbox.
+    Two modes:
 
-    Use this to verify drawings numerically without rendering:
-    - Confirm a dim labelled "40" actually spans ~40 mm on the page.
-    - Check that leaders are positioned cleanly (elbow outside the label).
-    - Get the full drawing extent to plan view placement.
+    1. Session mode (default): inspects objects registered via annotate()/show().
+       Returns per-object bounding boxes, face/edge counts, annotation metadata
+       (label string, measured length, leader tip/elbow), and structural lint.
 
-    Use annotate(result, name) instead of show(result.shape, name) when building with
-    build123d_drafting so that metadata (label, length, tip, elbow) is stored:
+    2. SVG mode (svg_path set): parses an SVG file from disk and reports page
+       size, layer ids, text content + positions, and element counts. Decouples
+       inspection from the build-and-register ceremony — works on SVGs from any
+       source (CI artifacts, third-party exports, prior runs).
+
+    Use annotate(result, name) instead of show(result.shape, name) when building
+    with build123d_drafting so metadata is captured:
 
         from build123d_drafting import dim_linear, Draft
         draft = Draft(font_size=2.5, decimal_precision=1)
         w = dim_linear((-20, -10, 0), (20, -10, 0), "below", 8, draft, label="40")
-        annotate(w, "width_dim")   # stores metadata AND registers for render_view
+        annotate(w, "width_dim")
 
-    objects: comma-separated object names (default: all registered objects).
+    For vanilla build123d.ExtensionLine/DimensionLine, pass the label explicitly:
+
+        w = ExtensionLine(border=[...], offset=6, draft=draft, label="40")
+        annotate(w, "width_dim", label="40")
+
+    Args:
+        objects: comma-separated object names (default: all). Session mode only.
+        svg_path: path to an SVG file on disk. Switches to SVG mode.
     """
-    return _session.inspect_drawing(objects)
+    return _session.inspect_drawing(objects, svg_path)
+
+
+@mcp.tool()
+def view_axes(viewport_origin: list[float], viewport_up: list[float] = [0.0, 1.0, 0.0], look_at: list[float] = [0.0, 0.0, 0.0]) -> str:
+    """Return the world→page axis mapping for a project_to_viewport call,
+    computed analytically (no projection performed). Use this BEFORE rendering
+    a projected view to confirm which world axis ends up on which page axis
+    and with what sign — catches bottom-view/side-view axis swaps before they
+    show up in the render.
+
+    Returns JSON like {"world_X": ["page_X", -1.0], "world_Y": ["page_Y", 1.0],
+    "world_Z": ["depth", 0.0]} — for a bottom-view origin (0,0,-100), world-X
+    flips to negative page-X.
+
+    Args:
+        viewport_origin: camera position, same arg as project_to_viewport.
+        viewport_up: up vector. Defaults to (0,1,0).
+        look_at: target point. Defaults to origin.
+    """
+    return _session.view_axes(tuple(viewport_origin), tuple(viewport_up), tuple(look_at))
+
+
+@mcp.tool()
+def lint_drawing(svg_path: str = "") -> str:
+    """Run structural drawing-quality checks and return JSON {violations: [...]}.
+
+    Session mode (default): scans session.objects + drawing_annotations for
+    label-vs-measured-length divergence (>0.5%, likely axis swap) and
+    leader-elbow-inside-label-bbox (line struck through text).
+
+    SVG mode (svg_path set): scans an SVG file for layer-level pathologies
+    that only show up at export time — most importantly <text> elements with
+    fill='none' or no fill attribute (glyphs render as illegible thick outlines).
+
+    Each violation is {severity, check, object, message}. Run this after major
+    drawing additions; running it BEFORE rendering catches the bug at the source.
+    """
+    return _session.lint_drawing(svg_path)
+
+
+@mcp.tool()
+def render_drawing(svg_path: str, width: int = 1200, save_to: str = "") -> list:
+    """Rasterise an existing SVG file to PNG via resvg-py.
+
+    Complements render_view (which takes build123d shapes from the live
+    session) by accepting an SVG written outside the sandbox — typically by
+    a short Python script that does the ExportSVG call directly. The PNG is
+    returned inline so the LLM can see the drawing without you having to
+    open the file in another tool.
+
+    Args:
+        svg_path: path to an SVG file on disk.
+        width: output pixel width (default 1200); height set by SVG aspect ratio.
+        save_to: optional path to write the PNG. If empty, PNG bytes are
+            delivered inline only.
+    """
+    result = _session.render_drawing(svg_path, width, save_to)
+
+    if "error" in result:
+        return [TextContent(type="text", text=f"render_drawing error: {result['error']}")]
+
+    contents: list = []
+    if "png" in result:
+        if save_to and result.get("png_path"):
+            path = result["png_path"]
+        else:
+            fd, path = tempfile.mkstemp(suffix=".png", prefix="build123d_drawing_")
+            os.close(fd)
+            with open(path, "wb") as f:
+                f.write(result["png"])
+        contents.append(ImageContent(
+            type="image",
+            data=base64.b64encode(result["png"]).decode(),
+            mimeType="image/png",
+        ))
+        contents.append(TextContent(type="text", text=f"[SEND: {path}]"))
+        contents.append(TextContent(
+            type="text",
+            text=f"Rasterised {svg_path} to PNG ({result['size_bytes']} bytes, width={result['width']}px).",
+        ))
+    return contents
 
 
 @mcp.tool()
