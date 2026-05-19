@@ -81,6 +81,68 @@ annotate(w, "width")
         # annotation from first execute must still be there (only the bad exec rolls back)
         assert "width" in session.drawing_annotations
 
+    # -----------------------------------------------------------------------
+    # Vanilla build123d primitives — annotate() must extract measured_length
+    # from .dimension and accept an explicit label= kwarg (issue #107).
+    # The old behaviour was: empty metadata block, label and length lost.
+    # -----------------------------------------------------------------------
+
+    def test_annotate_vanilla_extension_line_captures_dimension(self, session):
+        session.execute("""
+from build123d import ExtensionLine, Draft
+draft = Draft(font_size=2.5, decimal_precision=1, arrow_length=1.0, line_width=0.1)
+w = ExtensionLine(border=[(-20, 10, 0), (20, 10, 0)], offset=6, draft=draft, label="40")
+annotate(w, "width_dim", label="40")
+""")
+        ann = session.drawing_annotations.get("width_dim")
+        assert ann is not None
+        assert ann["label_str"] == "40"
+        assert abs(ann["measured_length"] - 40.0) < 0.01
+        assert ann["type"] == "ExtensionLine"
+
+    def test_annotate_vanilla_dimension_line_captures_dimension(self, session):
+        session.execute("""
+from build123d import DimensionLine, Draft
+draft = Draft(font_size=2.5, decimal_precision=1, arrow_length=1.0, line_width=0.1)
+d = DimensionLine(path=[(0, 0, 0), (25, 0, 0)], draft=draft, label="25")
+annotate(d, "len_dim", label="25")
+""")
+        ann = session.drawing_annotations.get("len_dim")
+        assert ann is not None
+        assert ann["label_str"] == "25"
+        assert abs(ann["measured_length"] - 25.0) < 0.01
+        assert ann["type"] == "DimensionLine"
+
+    def test_annotate_vanilla_extension_line_without_label_still_captures_length(self, session):
+        """Without an explicit label= kwarg, measured_length should still be
+        captured from .dimension (label_str just won't be present)."""
+        session.execute("""
+from build123d import ExtensionLine, Draft
+draft = Draft(font_size=2.5, decimal_precision=1, arrow_length=1.0, line_width=0.1)
+w = ExtensionLine(border=[(-15, 0, 0), (15, 0, 0)], offset=5, draft=draft)
+annotate(w, "no_label_dim")
+""")
+        ann = session.drawing_annotations.get("no_label_dim")
+        assert ann is not None
+        assert "measured_length" in ann
+        assert abs(ann["measured_length"] - 30.0) < 0.01
+        assert "label_str" not in ann
+
+    def test_annotate_label_kwarg_ignored_when_result_has_label_str(self, session):
+        """For DimResult (which already exposes label_str), an explicit
+        label= kwarg should not overwrite the helper's value."""
+        session.execute("""
+from build123d import *
+from build123d import Draft
+from build123d_drafting import dim_linear
+draft = Draft(font_size=2.5, decimal_precision=1)
+w = dim_linear((-10, 0, 0), (10, 0, 0), "above", 8, draft, label="20")
+annotate(w, "width", label="WRONG")
+""")
+        ann = session.drawing_annotations.get("width")
+        assert ann is not None
+        assert ann["label_str"] == "20"
+
 
 # ---------------------------------------------------------------------------
 # inspect_drawing tool
