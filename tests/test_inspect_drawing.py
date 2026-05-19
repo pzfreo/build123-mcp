@@ -192,3 +192,34 @@ annotate(w, "width")
 """)
         result = self._run(session)
         assert result["lint"] == []
+
+
+# ---------------------------------------------------------------------------
+# Regression: inspect_drawing must work through WorkerSession (issue #105).
+# The bare-Session tests above can't catch a routing bug because the in-process
+# Session has .objects/.drawing_annotations directly; the production server
+# uses WorkerSession, a parent-side IPC proxy whose state lives in a subprocess.
+# ---------------------------------------------------------------------------
+
+class TestInspectDrawingViaWorker:
+    def test_inspect_drawing_through_worker(self):
+        from build123d_mcp.worker import WorkerSession
+
+        ws = WorkerSession(exec_timeout=30)
+        try:
+            ws.execute("""
+from build123d import *
+from build123d import Draft
+from build123d_drafting import dim_linear
+draft = Draft(font_size=2.5, decimal_precision=1)
+w = dim_linear((-10, 0, 0), (10, 0, 0), "above", 8, draft, label="20")
+annotate(w, "width")
+""")
+            payload = json.loads(ws.inspect_drawing())
+            assert "error" not in payload, payload
+            assert "width" in payload["objects"]
+            ann = payload["objects"]["width"]["annotation"]
+            assert ann is not None
+            assert ann["label_str"] == "20"
+        finally:
+            ws._kill_worker()

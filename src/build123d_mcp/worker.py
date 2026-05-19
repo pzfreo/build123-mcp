@@ -151,6 +151,10 @@ def _dispatch(session: Any, op: str, args: dict, library_index: Any) -> Any:
         from build123d_mcp.tools.import_step import import_cad_file
         return import_cad_file(session, args["path"], args.get("name", ""))
 
+    if op == "inspect_drawing":
+        from build123d_mcp.tools.inspect_drawing import inspect_drawing
+        return inspect_drawing(session, args.get("objects", ""))
+
     raise ValueError(f"Unknown operation: '{op}'")
 
 
@@ -350,6 +354,9 @@ class WorkerSession:
 
     def import_cad_file(self, path: str, name: str = "") -> str:
         return self._call("import_cad_file", {"path": path, "name": name}, self._EXPORT_TIMEOUT)
+
+    def inspect_drawing(self, objects: str = "") -> str:
+        return self._call("inspect_drawing", {"objects": objects}, self._SHORT_TIMEOUT)
 
     def search_library(self, query: str = "") -> str:
         return self._call("search_library", {"query": query}, self._SHORT_TIMEOUT)
