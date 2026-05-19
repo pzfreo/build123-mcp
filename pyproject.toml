@@ -26,6 +26,11 @@ dependencies = [
     # resvg-py ships pre-built Rust wheels for all platforms with no native
     # library dependencies — works out-of-the-box on Linux/macOS/Windows.
     "resvg-py",
+    # Drawing-annotation helpers (dim_linear, leader, view_axes, lint_drawing).
+    # Bundled at runtime so `inspect_drawing`'s docstring promise — and the
+    # build123d://drafting cookbook — actually work out of the box.
+    # Import name remains `build123d_drafting` (install name ≠ import name).
+    "build123d-drafting-helpers>=0.1.0",
 ]
 
 [project.urls]
@@ -45,11 +50,7 @@ dev = [
     "pytest-timeout",
     "mypy",
     "pytest-cov>=7.1.0",
-    "build123d-drafting>=0.1.0",
 ]
-
-[tool.uv.sources]
-build123d-drafting = { git = "https://github.com/pzfreo/build123d-drafting-helpers.git" }
 
 [tool.mypy]
 files = ["src"]
