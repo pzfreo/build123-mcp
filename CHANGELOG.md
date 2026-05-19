@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.3.22
+
+Bug fixes and tooling improvements for the drawing workflow.
+
+### Bug fixes
+
+- **`view_axes` no longer times out** (#114): `view_axes` was forwarding to the worker subprocess which cold-imported the OCC kernel, blowing the 10 s `SHORT_TIMEOUT`. Fixed in `build123d-drafting-helpers` 0.1.1: `view_axes` is now pure Python arithmetic with no OCC dependency.
+- **`annotate()` auto-derives label from measured length** (#115): vanilla `build123d.ExtensionLine` does not expose the constructor label string after construction (`.label` is always `''`). `annotate()` now auto-derives `label_str` from `round(measured_length, 1)` when no explicit `label=` kwarg is passed. Pass `label="40"` explicitly or use `dim_linear()` from `build123d_drafting` when a custom label differs from the measured length.
+
+### Features
+
+- **`save_drawing_annotations(svg_path)` tool** (#116): writes `<svg_path>.dims.json` alongside an SVG with the session's `drawing_annotations` metadata. `inspect_drawing(svg_path=…)` reads the sidecar automatically and includes `annotations` + `annotations_note` in the response, restoring label content that is otherwise irrecoverable from build123d SVG output (text is rendered as glyph paths, not `<text>` elements).
+
+---
+
 ## v0.3.21
 
 Drawing-side fixes and feature landing. The four issues raised against 0.3.20 are all addressed, plus the helper library is now a proper PyPI dependency rather than a git-URL dev pin.
