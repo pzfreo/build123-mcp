@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.20
+
+Drawing annotation tooling: a companion helper library, an inspection tool, and sandbox access for drawing scripts.
+
+### Features
+
+- **`build123d-drafting` helper library** ([pzfreo/build123d-drafting-helpers](https://github.com/pzfreo/build123d-drafting-helpers)): pure-build123d helpers that address the rough edges in `build123d.drafting` — named-side `dim_linear`, crash-safe `safe_dim_line`, from-scratch `leader`, analytic `view_axes`, drawing linter `lint_drawing`, `iso_title_block`, and `surface_finish_mark`. Install with `pip install git+https://github.com/pzfreo/build123d-drafting-helpers.git`. Documented in the `build123d://drafting` cookbook.
+- **`inspect_drawing` tool**: reports bounding boxes, edge/face counts, and annotation metadata (label string, measured length, tip/elbow for leaders) for every object in the session. Includes an inline linter that flags label-vs-measured-length divergence > 0.5% and leader lines passing through their label text. Returns structured JSON so the LLM can verify a drawing before exporting.
+- **`annotate()` session builtin**: companion to `show()` for drawing objects. `annotate(dim_result, "width")` registers the shape in `session.objects` AND stores its `DimResult`/`LeaderResult` metadata in `session.drawing_annotations`, which `inspect_drawing` then reads back.
+- **`build123d_drafting` allowed in sandboxed code**: the security allowlist now includes `build123d_drafting` so LLM-generated drawing scripts can `from build123d_drafting import dim_linear, leader, …` without hitting the import block.
+- **`build123d://drafting` cookbook updated**: prominent section at the top covering the GitHub install line, all six helpers, and a worked pipeline example (view_axes → dim_linear → annotate → inspect_drawing).
+
+---
+
 ## v0.3.19
 
 Two bug fixes.
